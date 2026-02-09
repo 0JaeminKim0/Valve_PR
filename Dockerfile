@@ -1,10 +1,15 @@
-FROM node:20-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# 패키지 파일 복사 및 설치
-COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+# 시스템 의존성 설치
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python 패키지 설치
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 소스 복사
 COPY . .
@@ -12,5 +17,9 @@ COPY . .
 # 포트 설정
 EXPOSE 3000
 
+# 환경 변수
+ENV PORT=3000
+ENV PYTHONUNBUFFERED=1
+
 # 실행
-CMD ["npx", "tsx", "src/index.ts"]
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:3000", "--workers", "2", "--timeout", "120"]
