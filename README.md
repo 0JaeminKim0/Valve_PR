@@ -1,67 +1,122 @@
 # 밸브재 구매 AI Agent PoC
 
 ## 프로젝트 개요
-- **목적**: PR 자재별 최적 단가 제안 및 협력사 견적단가 검증 시스템
-- **특징**: Agentic UI - AI Agent의 분석 과정을 실시간 스트리밍으로 시각화
 
-## 화면 구성
+PR(구매요청) 자재별 최적 단가를 제안하고, 협력사 견적단가를 검증하며, 원재료 시황을 반영한 가격 적정성을 분석하는 AI Agent 기반 구매 의사결정 지원 시스템입니다.
 
-### 화면 1: PR 최적 추천 단가 제안
-- 단가테이블 × 발주실적 기반 분석
-- Rule 1: 밸브타입 매핑 (끝자리 제거)
-- Rule 2: 옵션단가 적용 (O-P, I-P, LOCK, DISC 등)
+### 핵심 기능
 
-### 화면 2: 협력사 견적 적정성 검증
-- 견적가 vs 발주실적(90%) 비교
-- 판정: 우수(🟢) / 보통(🟡) / 부적절(🔴)
+| 화면 | 기능 | 설명 |
+|------|------|------|
+| **화면 1** | PR 최적 단가 제안 | 단가테이블 + 발주실적 기반 추천 단가 산출 |
+| **화면 2** | 협력사 견적 검증 | 발주×90% 기준 적정성 판정 (우수/보통/부적절) |
+| **화면 3** | 시황 분석 | LME Cu/Sn 가격 vs 발주단가 트렌드 비교 |
 
-### 화면 3: 원재료 시황 × 발주단가 분석
-- VGBARR240AT (Bronze Casting: Cu 88% + Sn 12%)
-- LME 시황 지수 vs 발주단가 지수 비교
+### Agentic UI
 
-## 데이터
-- 단가테이블: 482건
-- 협력사 견적: 159건
-- 발주실적 (BC밸브): 654건
-- LME 시황: 12개월
+- 좌측 40%: Agent 활동 로그 (실시간 스트리밍)
+- 우측 60%: 분석 결과 및 차트
+- 단계별 진행: 데이터 수집 → Rule 적용 → LLM 분석 → 판정
 
 ## 기술 스택
-- Backend: Hono + TypeScript
-- Frontend: Tailwind CSS, Chart.js
-- AI: Claude API (Anthropic)
 
-## 실행 방법
+- **Backend**: Node.js + Express + TypeScript
+- **Frontend**: HTML + Tailwind CSS + Chart.js
+- **AI**: Claude API (claude-sonnet-4-20250514)
+- **배포**: Railway
 
-### 로컬 개발
-```bash
-npm install
-npm run dev
+## 데이터 구조
+
+| 데이터 | 건수 | 설명 |
+|--------|------|------|
+| 단가테이블 | 482건 | 밸브타입별 BODY2 단가 + 옵션 단가 |
+| 협력사 견적 | 159건 | 검증 대상 견적 |
+| 발주 실적 | 35,722건 | 과거 발주 이력 |
+| BC밸브 (VGBARR240AT) | 654건 | 시황 분석 대상 |
+| LME 시황 | 12건 | 2025년 Cu/Sn 월별 가격 |
+
+## 단가 산출 로직
+
 ```
+1. Rule 1: 밸브타입 매핑 (끝자리 제거)
+   - VGBASW350AT → VGBASW350A (단가테이블 키)
 
-### Railway 배포
-1. Railway 프로젝트 생성
-2. GitHub 연동 또는 코드 배포
-3. 환경변수 설정:
-   - `ANTHROPIC_API_KEY`: Claude API 키
-   - `PORT`: 3000 (자동 설정됨)
+2. Rule 2: 계약단가 = BODY2 + 옵션단가
+   - 옵션: I/O-P, LOCK, IND, DISC-SCS16 등
+
+3. Rule 3: 추천단가 = min(계약단가, 최근발주단가)
+
+4. 적정성 판정:
+   - 우수: 발주×90% ≥ 견적가
+   - 보통: 발주/계약 ≥ 견적가
+   - 부적절: 그 외
+```
 
 ## API 엔드포인트
 
-| 엔드포인트 | 메서드 | 설명 |
-|-----------|--------|------|
-| `/api/data/price-table` | GET | 단가테이블 조회 |
-| `/api/data/quotes` | GET | 견적 목록 조회 |
-| `/api/data/order-history` | GET | 발주실적 조회 |
-| `/api/data/lme` | GET | LME 시황 조회 |
-| `/api/recommend-price` | POST | 단가 추천 |
-| `/api/validate-quote` | POST | 견적 검증 |
-| `/api/market-analysis` | GET | 시황 분석 |
-| `/api/analyze/price` | POST | AI 단가 분석 (SSE) |
-| `/api/analyze/market` | POST | AI 시황 분석 (SSE) |
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| GET | `/api/health` | 서버 상태 확인 |
+| POST | `/api/screen1/analyze` | PR 단가 분석 |
+| POST | `/api/screen1/llm-analyze` | PR LLM 분석 |
+| POST | `/api/screen2/verify` | 견적 검증 |
+| POST | `/api/screen2/llm-analyze` | 견적 LLM 분석 |
+| GET | `/api/screen3/trend` | 시황 트렌드 |
+| POST | `/api/screen3/llm-analyze` | 시황 LLM 분석 |
 
-## 환경변수
+## 로컬 개발
 
-| 변수명 | 설명 | 필수 |
-|--------|------|------|
-| `ANTHROPIC_API_KEY` | Claude API 키 | ✅ |
-| `PORT` | 서버 포트 (기본: 3000) | ❌ |
+```bash
+# 의존성 설치
+npm install
+
+# 개발 서버 실행
+npm run dev
+
+# 빌드
+npm run build
+
+# 프로덕션 실행
+npm start
+```
+
+## 환경 변수
+
+```env
+PORT=3000
+ANTHROPIC_API_KEY=your-api-key
+```
+
+## Railway 배포
+
+1. GitHub 연동
+2. 환경변수 설정: `ANTHROPIC_API_KEY`
+3. 자동 빌드 & 배포
+
+## 프로젝트 구조
+
+```
+webapp/
+├── src/
+│   └── server.ts          # Express 서버 + API
+├── public/
+│   └── index.html         # Agentic UI 프론트엔드
+├── data/
+│   ├── price_table.json   # 단가테이블
+│   ├── quote_sample.json  # 협력사 견적
+│   ├── order_history_*.json # 발주실적
+│   └── lme_data.json      # LME 시황
+├── dist/                   # 빌드 결과
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+## 샌드박스 URL
+
+- **개발 서버**: https://3000-ih3ml8qs487oelbx58ppv-2e77fc33.sandbox.novita.ai
+
+---
+
+**버전**: v1.0.0  
+**최종 수정**: 2026-02-09
