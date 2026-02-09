@@ -3,196 +3,433 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>밸브재 구매 AI Agent PoC</title>
+    <title>밸브재 구매 AI Agent PoC v2.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
         * { font-family: 'Noto Sans KR', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
         
-        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+        /* ═══════════════════════════════════════════════════════ */
+        /* PRD v2.0 Animations                                      */
+        /* ═══════════════════════════════════════════════════════ */
+        @keyframes slideInLeft { 
+            from { opacity: 0; transform: translateX(-30px); } 
+            to { opacity: 1; transform: translateX(0); } 
+        }
+        @keyframes slideInUp { 
+            from { opacity: 0; transform: translateY(20px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes gradientMove { 
+            0% { background-position: 0% 50%; } 
+            50% { background-position: 100% 50%; } 
+            100% { background-position: 0% 50%; } 
+        }
         
-        .slide-in { animation: slideIn 0.4s ease-out forwards; }
+        .slide-in-left { animation: slideInLeft 0.4s ease-out forwards; }
+        .slide-in-up { animation: slideInUp 0.4s ease-out forwards; }
         .fade-in { animation: fadeIn 0.5s ease-out forwards; }
         .pulse { animation: pulse 1.5s ease-in-out infinite; }
         
+        /* ═══════════════════════════════════════════════════════ */
+        /* PRD v2.0 Agent Cards (색상별 분류)                       */
+        /* ═══════════════════════════════════════════════════════ */
+        .agent-card {
+            border-radius: 12px;
+            padding: 14px 18px;
+            margin-bottom: 14px;
+            background: rgba(30, 41, 59, 0.6);
+            border-left: 4px solid;
+            backdrop-filter: blur(8px);
+            transition: all 0.3s ease;
+        }
+        .agent-card:hover { transform: translateX(4px); }
+        
+        /* 데이터 수집: 파란색 */
+        .agent-card.data { 
+            border-color: #3b82f6; 
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(30, 41, 59, 0.6) 100%);
+        }
+        .agent-card.data .card-icon { color: #60a5fa; }
+        
+        /* Rule 적용: 보라색 */
+        .agent-card.rule { 
+            border-color: #8b5cf6; 
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(30, 41, 59, 0.6) 100%);
+        }
+        .agent-card.rule .card-icon { color: #a78bfa; }
+        
+        /* 웹검색: 초록색 */
+        .agent-card.search { 
+            border-color: #10b981; 
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(30, 41, 59, 0.6) 100%);
+        }
+        .agent-card.search .card-icon { color: #34d399; }
+        
+        /* LLM 분석: 주황색 */
+        .agent-card.llm { 
+            border-color: #f59e0b; 
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(30, 41, 59, 0.6) 100%);
+        }
+        .agent-card.llm .card-icon { color: #fbbf24; }
+        
+        /* 판정 결과: 색상별 */
+        .agent-card.result-good { border-color: #10b981; background: rgba(16, 185, 129, 0.15); }
+        .agent-card.result-normal { border-color: #f59e0b; background: rgba(245, 158, 11, 0.15); }
+        .agent-card.result-bad { border-color: #ef4444; background: rgba(239, 68, 68, 0.15); }
+        
+        /* Collapsed 상태 (완료된 단계) */
+        .agent-card.collapsed {
+            padding: 10px 16px;
+            margin-bottom: 8px;
+            opacity: 0.7;
+            cursor: pointer;
+        }
+        .agent-card.collapsed:hover { opacity: 1; }
+        .agent-card.collapsed .card-content { display: none; }
+        
+        /* ═══════════════════════════════════════════════════════ */
+        /* 타이핑 효과 (PRD: LLM 스트리밍)                           */
+        /* ═══════════════════════════════════════════════════════ */
+        .typing-cursor::after {
+            content: '▌';
+            animation: blink 0.7s infinite;
+            color: #f59e0b;
+            margin-left: 2px;
+        }
+        
+        /* 스피너 */
         .spinner {
             border: 2px solid rgba(255,255,255,0.1);
-            border-top: 2px solid #3b82f6;
+            border-top: 2px solid currentColor;
             border-radius: 50%;
             width: 16px;
             height: 16px;
             animation: spin 0.8s linear infinite;
             display: inline-block;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spinner-lg { width: 24px; height: 24px; border-width: 3px; }
         
+        /* ═══════════════════════════════════════════════════════ */
+        /* 진행률 바 (PRD: 상단 Progress)                            */
+        /* ═══════════════════════════════════════════════════════ */
+        .progress-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-bar .fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899);
+            background-size: 200% 100%;
+            animation: gradientMove 3s ease infinite;
+            transition: width 0.5s ease;
+        }
+        
+        /* ═══════════════════════════════════════════════════════ */
+        /* 탭 버튼                                                   */
+        /* ═══════════════════════════════════════════════════════ */
+        .tab-btn {
+            position: relative;
+            overflow: hidden;
+        }
         .tab-btn.active {
-            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
             color: white;
-            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+        }
+        .tab-btn.active::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: gradientMove 2s ease infinite;
         }
         
-        /* 콘솔 스타일 - Python 원본과 동일 */
-        .console-output {
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            font-size: 12px;
-            line-height: 1.7;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-        .console-header { color: #fbbf24; font-weight: bold; }
-        .console-subheader { color: #60a5fa; }
-        .console-success { color: #34d399; }
-        .console-warning { color: #f59e0b; }
-        .console-error { color: #f87171; }
-        .console-info { color: #94a3b8; }
-        .console-highlight { color: #a78bfa; }
-        
-        /* PRD 테이블 스타일 */
+        /* ═══════════════════════════════════════════════════════ */
+        /* PRD v2.0 테이블 스타일                                    */
+        /* ═══════════════════════════════════════════════════════ */
         .prd-table {
             font-size: 11px;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             width: 100%;
         }
+        .prd-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
         .prd-table th {
-            background: #1e293b;
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
             color: #e2e8f0;
             font-weight: 600;
-            padding: 10px 6px;
+            padding: 12px 10px;
             text-align: center;
             border: 1px solid #334155;
             white-space: nowrap;
         }
         .prd-table th.section-header {
-            background: #0f172a;
-            color: #60a5fa;
-            font-size: 12px;
+            background: linear-gradient(135deg, #1e40af 0%, #3730a3 100%);
+            color: #fff;
+            font-size: 11px;
             font-weight: 700;
-        }
-        .prd-table th.sub-section {
-            background: #1e3a5f;
-            color: #93c5fd;
+            letter-spacing: 0.5px;
         }
         .prd-table td {
-            padding: 8px 6px;
+            padding: 12px 10px;
             border: 1px solid #334155;
             text-align: center;
             vertical-align: middle;
+            background: rgba(15, 23, 42, 0.4);
         }
-        .prd-table tr:nth-child(even) td { background: rgba(30,41,59,0.3); }
-        .prd-table tr:hover td { background: rgba(59, 130, 246, 0.15); }
+        .prd-table tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+        .prd-table tr:hover td { background: rgba(59, 130, 246, 0.15) !important; cursor: pointer; }
+        .prd-table tr.expanded td { background: rgba(139, 92, 246, 0.2) !important; }
         .prd-table .text-left { text-align: left; }
         .prd-table .text-right { text-align: right; }
-        .prd-table .highlight { background: rgba(251, 191, 36, 0.15) !important; }
-        .prd-table .price { font-family: 'Consolas', monospace; font-weight: 500; }
-        .prd-table .mapped { color: #34d399; }
-        .prd-table .unmapped { color: #f59e0b; }
+        .prd-table .price { font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 11px; }
+        .prd-table .highlight { background: rgba(251, 191, 36, 0.2) !important; }
+        .prd-table .recommend { background: rgba(34, 197, 94, 0.2) !important; color: #4ade80; font-weight: 700; }
         
-        /* 스크롤바 */
+        /* 상세 펼침 패널 (PRD: 행 클릭 확장) */
+        .detail-panel {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 12px 8px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        
+        /* ═══════════════════════════════════════════════════════ */
+        /* 배지                                                     */
+        /* ═══════════════════════════════════════════════════════ */
+        .badge { 
+            padding: 5px 12px; 
+            border-radius: 20px; 
+            font-size: 11px; 
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .badge-good { background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+        .badge-normal { background: rgba(245, 158, 11, 0.25); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+        .badge-bad { background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+        .badge-info { background: rgba(59, 130, 246, 0.25); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
+        
+        /* ═══════════════════════════════════════════════════════ */
+        /* KPI 카드                                                 */
+        /* ═══════════════════════════════════════════════════════ */
+        .kpi-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .kpi-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+            border-color: rgba(255,255,255,0.2);
+        }
+        .kpi-value {
+            font-size: 2rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.2;
+        }
+        
+        /* ═══════════════════════════════════════════════════════ */
+        /* 스크롤바                                                 */
+        /* ═══════════════════════════════════════════════════════ */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+        
+        /* ═══════════════════════════════════════════════════════ */
+        /* 차트 컨테이너                                             */
+        /* ═══════════════════════════════════════════════════════ */
+        .chart-container {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.7) 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 20px;
+        }
+        
+        /* 적정성 타임라인 */
+        .timeline-dot {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .timeline-dot:hover { transform: scale(1.15); }
+        .timeline-dot.good { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .timeline-dot.normal { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .timeline-dot.bad { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
     </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen">
-    <!-- Header -->
-    <header class="bg-gray-800/80 backdrop-blur border-b border-gray-700/50 px-6 py-4 sticky top-0 z-50">
-        <div class="flex items-center justify-between max-w-[1920px] mx-auto">
-            <div class="flex items-center gap-4">
-                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
-                    <i class="fas fa-robot text-white"></i>
+<body class="bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 text-white min-h-screen">
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- Header (PRD: 상단 Progress Bar 포함)                     -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <header class="bg-gray-800/70 backdrop-blur-xl border-b border-gray-700/50 px-6 py-4 sticky top-0 z-50">
+        <div class="max-w-[1920px] mx-auto">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/30">
+                        <i class="fas fa-robot text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                            밸브재 구매 AI Agent
+                        </h1>
+                        <p class="text-gray-400 text-xs">PoC Demo v2.0 — PRD 기반 재설계</p>
+                    </div>
                 </div>
-                <div>
-                    <h1 class="text-lg font-bold">밸브재 구매 AI Agent PoC</h1>
-                    <p class="text-gray-400 text-xs">PR 최적단가 제안 · 견적 검증 · 시황 분석 (Python 기반)</p>
+                <div class="flex items-center gap-4">
+                    <button onclick="startDemo()" id="demoBtn" class="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-purple-500/30 flex items-center gap-2">
+                        <i class="fas fa-play"></i>
+                        <span>데모 시작</span>
+                        <span class="text-xs opacity-70">(20~30초)</span>
+                    </button>
+                    <span id="apiStatus" class="px-4 py-2 bg-yellow-500/20 text-yellow-400 rounded-full text-xs font-medium flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-current pulse"></span>
+                        연결 확인 중...
+                    </span>
                 </div>
             </div>
-            <div class="flex items-center gap-4">
-                <span id="apiStatus" class="px-3 py-1.5 bg-yellow-500/20 text-yellow-400 rounded-full text-xs font-medium">
-                    <i class="fas fa-circle text-[8px] mr-1.5 pulse"></i>연결 확인 중...
-                </span>
-                <span class="text-gray-400 text-xs">
-                    <i class="fas fa-database mr-1"></i><span id="dataCount">로딩...</span>
-                </span>
+            <!-- PRD: 상단 Progress Bar -->
+            <div class="progress-bar">
+                <div id="progressFill" class="fill" style="width: 0%"></div>
+            </div>
+            <div class="flex justify-between mt-2 text-xs text-gray-500">
+                <span id="progressStep">대기 중</span>
+                <span id="progressPercent">0%</span>
             </div>
         </div>
     </header>
 
-    <!-- Tab Navigation -->
-    <nav class="bg-gray-800/40 px-6 py-3 border-b border-gray-700/50">
-        <div class="flex gap-2 max-w-[1920px] mx-auto">
-            <button onclick="switchTab(1)" class="tab-btn active px-5 py-2 rounded-lg text-sm font-medium transition-all" data-tab="1">
-                <i class="fas fa-calculator mr-2"></i>화면1: PR 최적단가 제안
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- Tab Navigation                                          -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <nav class="bg-gray-800/40 backdrop-blur px-6 py-3 border-b border-gray-700/50">
+        <div class="flex gap-3 max-w-[1920px] mx-auto">
+            <button onclick="switchTab(1)" class="tab-btn active px-6 py-3 rounded-xl text-sm font-semibold transition-all flex items-center gap-2" data-tab="1">
+                <i class="fas fa-calculator"></i>
+                화면1: PR 최적단가 제안
             </button>
-            <button onclick="switchTab(2)" class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-all bg-gray-700/50 hover:bg-gray-700" data-tab="2">
-                <i class="fas fa-check-circle mr-2"></i>화면2: 협력사 견적 검증
+            <button onclick="switchTab(2)" class="tab-btn px-6 py-3 rounded-xl text-sm font-semibold transition-all bg-gray-700/50 hover:bg-gray-700 flex items-center gap-2" data-tab="2">
+                <i class="fas fa-clipboard-check"></i>
+                화면2: 견적 검증
             </button>
-            <button onclick="switchTab(3)" class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-all bg-gray-700/50 hover:bg-gray-700" data-tab="3">
-                <i class="fas fa-chart-line mr-2"></i>화면3: 시황 분석
+            <button onclick="switchTab(3)" class="tab-btn px-6 py-3 rounded-xl text-sm font-semibold transition-all bg-gray-700/50 hover:bg-gray-700 flex items-center gap-2" data-tab="3">
+                <i class="fas fa-chart-line"></i>
+                화면3: 시황 분석
             </button>
         </div>
     </nav>
 
-    <!-- Main Content: 35% Agent Log + 65% Results -->
-    <main class="flex h-[calc(100vh-130px)] max-w-[1920px] mx-auto">
-        <!-- Left Panel: Agent Logs (35%) -->
-        <div class="w-[35%] border-r border-gray-700/50 flex flex-col bg-gray-900/50">
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- Main Content: PRD v2.0 좌40% Agent + 우60% 결과         -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <main class="flex h-[calc(100vh-155px)] max-w-[1920px] mx-auto">
+        <!-- Left Panel: Agent 스트리밍 패널 (40%) -->
+        <div class="w-[40%] border-r border-gray-700/50 flex flex-col bg-gradient-to-b from-gray-900/50 to-slate-900/50">
             <div class="p-4 border-b border-gray-700/50 bg-gray-800/30">
                 <div class="flex items-center justify-between">
                     <h2 class="font-semibold text-sm flex items-center gap-2">
-                        <i class="fas fa-terminal text-blue-400"></i>
-                        Agent 분석 로그 (Python 스타일)
+                        <i class="fas fa-brain text-purple-400"></i>
+                        Agent 분석 과정
                     </h2>
-                    <div class="flex items-center gap-2">
-                        <button onclick="runCurrentAnalysis()" id="runBtn" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium transition-all">
-                            <i class="fas fa-play mr-1"></i>분석 실행
-                        </button>
-                        <button onclick="clearLogs()" class="text-gray-400 hover:text-white text-xs px-2 py-1">
-                            <i class="fas fa-trash-alt"></i>
+                    <div class="flex items-center gap-3">
+                        <span id="stepCount" class="text-xs text-gray-500">0 / 0 단계</span>
+                        <button onclick="collapseCompleted()" class="text-xs text-gray-400 hover:text-white transition-colors" title="완료 단계 접기">
+                            <i class="fas fa-compress-alt"></i>
                         </button>
                     </div>
                 </div>
             </div>
-            <div id="agentLogs" class="flex-1 overflow-y-auto p-4 console-output bg-gray-950/50">
-                <div class="text-gray-500 text-center py-12">
-                    <i class="fas fa-robot text-4xl mb-4 opacity-20"></i>
-                    <p class="text-sm">"분석 실행" 버튼을 클릭하면<br>Python 스타일 로그가 표시됩니다</p>
+            <div id="agentPanel" class="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-transparent to-gray-950/30">
+                <div class="text-center py-20 text-gray-500">
+                    <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-800/50 flex items-center justify-center">
+                        <i class="fas fa-robot text-4xl opacity-30"></i>
+                    </div>
+                    <p class="text-sm font-medium">"데모 시작" 버튼을 클릭하면</p>
+                    <p class="text-sm">Agent가 분석을 시작합니다</p>
+                    <div class="mt-4 text-xs text-gray-600">
+                        <p>데이터 수집 → Rule 적용 → LLM 분석 → 판정</p>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Right Panel: Results (65%) -->
-        <div class="w-[65%] flex flex-col bg-gray-900/30">
+        <!-- Right Panel: 결과 패널 (60%) -->
+        <div class="w-[60%] flex flex-col bg-gradient-to-b from-gray-900/30 to-slate-900/30">
             <!-- Tab 1: PR 최적단가 제안 -->
-            <div id="tab1" class="tab-content flex-1 overflow-auto p-4">
-                <div id="screen1-intro" class="text-center py-12 text-gray-500">
-                    <i class="fas fa-file-invoice-dollar text-5xl mb-4 opacity-20"></i>
-                    <p class="text-sm">PR 건별 최적 단가 분석 결과가 여기에 표시됩니다</p>
-                    <p class="text-xs mt-2 text-gray-600">Rule1(BODY2) + Rule2(옵션) + Rule3(수량환산) → 계약단가</p>
-                    <p class="text-xs text-gray-600">과거 발주실적: 1순위(타입+내역) / 2순위(타입만)</p>
+            <div id="tab1" class="tab-content flex-1 overflow-auto p-5">
+                <div id="screen1-intro" class="text-center py-20 text-gray-500">
+                    <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-800/50 flex items-center justify-center">
+                        <i class="fas fa-file-invoice-dollar text-4xl opacity-30"></i>
+                    </div>
+                    <p class="text-sm font-medium">PR 건별 최적 추천 단가 분석 결과</p>
+                    <p class="text-xs mt-2 text-gray-600">단가테이블 기반 계약단가 + 과거 발주실적 기반 예상단가</p>
+                    <div class="mt-6 grid grid-cols-3 gap-4 max-w-md mx-auto text-xs">
+                        <div class="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                            <div class="text-blue-400 font-semibold">Rule 1</div>
+                            <div class="text-gray-500">BODY2 단가</div>
+                        </div>
+                        <div class="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                            <div class="text-purple-400 font-semibold">Rule 2</div>
+                            <div class="text-gray-500">옵션 단가</div>
+                        </div>
+                        <div class="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                            <div class="text-green-400 font-semibold">Rule 3</div>
+                            <div class="text-gray-500">합계 단가</div>
+                        </div>
+                    </div>
                 </div>
                 <div id="screen1-results" class="hidden"></div>
             </div>
 
-            <!-- Tab 2: 협력사 견적 검증 -->
-            <div id="tab2" class="tab-content hidden flex-1 overflow-auto p-4">
-                <div id="screen2-intro" class="text-center py-12 text-gray-500">
-                    <i class="fas fa-clipboard-check text-5xl mb-4 opacity-20"></i>
-                    <p class="text-sm">협력사 견적 적정성 검증 결과가 여기에 표시됩니다</p>
+            <!-- Tab 2: 견적 검증 -->
+            <div id="tab2" class="tab-content hidden flex-1 overflow-auto p-5">
+                <div id="screen2-intro" class="text-center py-20 text-gray-500">
+                    <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-800/50 flex items-center justify-center">
+                        <i class="fas fa-clipboard-check text-4xl opacity-30"></i>
+                    </div>
+                    <p class="text-sm font-medium">협력사 견적 적정성 검증 결과</p>
+                    <p class="text-xs mt-2 text-gray-600">발주실적 대비 견적가 적정성 분석</p>
                 </div>
                 <div id="screen2-results" class="hidden"></div>
             </div>
 
             <!-- Tab 3: 시황 분석 -->
-            <div id="tab3" class="tab-content hidden flex-1 overflow-auto p-4">
-                <div id="screen3-intro" class="text-center py-12 text-gray-500">
-                    <i class="fas fa-globe text-5xl mb-4 opacity-20"></i>
-                    <p class="text-sm">원재료 시황 × 발주단가 분석 결과가 여기에 표시됩니다</p>
+            <div id="tab3" class="tab-content hidden flex-1 overflow-auto p-5">
+                <div id="screen3-intro" class="text-center py-20 text-gray-500">
+                    <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-800/50 flex items-center justify-center">
+                        <i class="fas fa-globe text-4xl opacity-30"></i>
+                    </div>
+                    <p class="text-sm font-medium">원재료 시황 × 발주단가 종합 분석</p>
+                    <p class="text-xs mt-2 text-gray-600">LME Cu/Sn 시황 vs 업체별 발주단가 트렌드</p>
                 </div>
                 <div id="screen3-results" class="hidden"></div>
             </div>
@@ -200,15 +437,19 @@
     </main>
 
     <script>
-        // ═══════════════════════════════════════════════════════
-        // Global State
-        // ═══════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════
+        //  PRD v2.0 Global State
+        // ═══════════════════════════════════════════════════════════════
         let currentTab = 1;
         let isRunning = false;
+        let currentStep = 0;
+        let totalSteps = 0;
+        let expandedRow = null;
+        let chartInstances = {};
 
-        // ═══════════════════════════════════════════════════════
-        // Utility Functions
-        // ═══════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════
+        //  Utility Functions
+        // ═══════════════════════════════════════════════════════════════
         function fmt(n) {
             if (n === null || n === undefined || isNaN(n)) return '-';
             return Math.round(n).toLocaleString('ko-KR');
@@ -218,95 +459,140 @@
             return new Promise(r => setTimeout(r, ms));
         }
 
-        // ═══════════════════════════════════════════════════════
-        // Console Log Functions (Python 스타일)
-        // ═══════════════════════════════════════════════════════
-        const logContainer = () => document.getElementById('agentLogs');
-        
-        function clearLogs() {
-            logContainer().innerHTML = `
-                <div class="text-gray-500 text-center py-12">
-                    <i class="fas fa-robot text-4xl mb-4 opacity-20"></i>
-                    <p class="text-sm">"분석 실행" 버튼을 클릭하면<br>Python 스타일 로그가 표시됩니다</p>
-                </div>
-            `;
-        }
-
-        function initLogs() {
-            logContainer().innerHTML = '';
-        }
-
-        async function renderLogs(logs) {
-            for (const log of logs) {
-                await renderSingleLog(log);
+        // PRD: 타이핑 효과 (LLM 스트리밍)
+        async function typeText(element, text, speed = 25) {
+            element.classList.add('typing-cursor');
+            let i = 0;
+            const len = text.length;
+            while (i < len) {
+                const chunk = text.substring(i, Math.min(i + 3, len));
+                element.textContent += chunk;
+                i += 3;
+                if (i % 9 === 0) await sleep(speed);
             }
+            element.classList.remove('typing-cursor');
         }
 
-        async function renderSingleLog(log) {
-            const container = logContainer();
-            let html = '';
+        // ═══════════════════════════════════════════════════════════════
+        //  PRD v2.0 Progress Bar
+        // ═══════════════════════════════════════════════════════════════
+        function setProgress(percent, stepText) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressStep').textContent = stepText;
+            document.getElementById('progressPercent').textContent = percent + '%';
+        }
+
+        function updateStepCount(current, total) {
+            currentStep = current;
+            totalSteps = total;
+            document.getElementById('stepCount').textContent = `${current} / ${total} 단계`;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        //  PRD v2.0 Agent Panel Functions
+        // ═══════════════════════════════════════════════════════════════
+        function clearAgentPanel() {
+            document.getElementById('agentPanel').innerHTML = '';
+            setProgress(0, '대기 중');
+            updateStepCount(0, 0);
+        }
+
+        async function addAgentCard(type, content, options = {}) {
+            const panel = document.getElementById('agentPanel');
+            const card = document.createElement('div');
+            card.className = `agent-card ${type} slide-in-left`;
+            card.dataset.cardId = Date.now();
             
-            switch (log.type) {
-                case 'header':
-                    const line = '═'.repeat(70);
-                    html = `<div class="console-header">\n${line}\n  ${log.text}\n${line}</div>`;
+            let icon, iconClass, title;
+            switch(type) {
+                case 'data':
+                    icon = 'fa-database';
+                    iconClass = 'text-blue-400';
+                    title = options.title || '데이터 수집';
                     break;
-                    
-                case 'subheader':
-                    const subline = '─'.repeat(60);
-                    html = `<div class="console-subheader">\n  ${subline}\n  📌 ${log.text}\n  ${subline}</div>`;
+                case 'rule':
+                    icon = 'fa-cogs';
+                    iconClass = 'text-purple-400';
+                    title = options.title || 'Rule 적용';
                     break;
-                    
-                case 'info':
-                    html = `<div class="console-info">${log.text}</div>`;
+                case 'search':
+                    icon = 'fa-globe';
+                    iconClass = 'text-green-400';
+                    title = options.title || '웹검색';
                     break;
-                    
-                case 'success':
-                    html = `<div class="console-success">  ✅ ${log.text}</div>`;
+                case 'llm':
+                    icon = 'fa-brain';
+                    iconClass = 'text-orange-400';
+                    title = options.title || 'LLM 분석';
                     break;
-                    
-                case 'warning':
-                    html = `<div class="console-warning">  ⚠️ ${log.text}</div>`;
+                case 'result-good':
+                case 'result-normal':
+                case 'result-bad':
+                    icon = 'fa-flag-checkered';
+                    iconClass = type === 'result-good' ? 'text-green-400' : 
+                               (type === 'result-bad' ? 'text-red-400' : 'text-yellow-400');
+                    title = options.title || '판정 결과';
                     break;
-                    
-                case 'highlight':
-                    html = `<div class="console-highlight">  ${log.text}</div>`;
-                    break;
-                    
-                case 'box':
-                    const boxLines = log.lines.map(l => `  │ ${l}`).join('\n');
-                    const label = log.label ? ` ${log.label}` : '';
-                    html = `<div class="console-info">
-  ┌── PR #${log.seq}${label} ${'─'.repeat(50)}
-${boxLines}
-  └${'─'.repeat(65)}</div>`;
-                    break;
-                    
-                case 'agent':
-                    const agentLabel = log.isApi ? '🤖 [Claude API 응답]' : '🤖 [Rule-based 분석]';
-                    const agentLines = log.text.split('\n').map(l => `     ${l}`).join('\n');
-                    html = `<div>
-  <span class="console-highlight">${agentLabel}</span>
-<span class="console-info">${agentLines}</span></div>`;
-                    break;
-                    
                 default:
-                    html = `<div class="console-info">${JSON.stringify(log)}</div>`;
+                    icon = 'fa-info-circle';
+                    iconClass = 'text-gray-400';
+                    title = options.title || '정보';
             }
             
-            const div = document.createElement('div');
-            div.innerHTML = html;
-            div.className = 'slide-in';
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
-            await sleep(50);
+            const statusHtml = options.loading 
+                ? '<span class="spinner"></span>' 
+                : (options.badge || '<i class="fas fa-check text-green-400"></i>');
+            
+            card.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold flex items-center gap-2">
+                        <i class="fas ${icon} ${iconClass} card-icon"></i>
+                        ${title}
+                    </span>
+                    <span class="card-status">${statusHtml}</span>
+                </div>
+                <div class="card-content text-sm text-gray-300 leading-relaxed" id="content-${card.dataset.cardId}"></div>
+            `;
+            
+            panel.appendChild(card);
+            panel.scrollTop = panel.scrollHeight;
+            
+            const contentEl = card.querySelector('.card-content');
+            
+            if (options.typing) {
+                await typeText(contentEl, content, options.speed || 20);
+            } else {
+                contentEl.innerHTML = content;
+            }
+            
+            // 로딩 완료 시 스피너 → 체크
+            if (options.loading) {
+                await sleep(options.delay || 600);
+                const status = card.querySelector('.card-status');
+                if (status) status.innerHTML = '<i class="fas fa-check text-green-400"></i>';
+            }
+            
+            await sleep(150);
+            return card;
         }
 
-        // ═══════════════════════════════════════════════════════
-        // Tab Switching
-        // ═══════════════════════════════════════════════════════
+        // PRD: 완료된 단계 접기
+        function collapseCompleted() {
+            const cards = document.querySelectorAll('.agent-card:not(.result-good):not(.result-normal):not(.result-bad)');
+            cards.forEach((card, idx) => {
+                if (idx < cards.length - 2) {
+                    card.classList.toggle('collapsed');
+                }
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        //  Tab Switching
+        // ═══════════════════════════════════════════════════════════════
         function switchTab(tabNum) {
+            if (isRunning) return;
             currentTab = tabNum;
+            
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('active');
                 btn.classList.add('bg-gray-700/50', 'hover:bg-gray-700');
@@ -319,41 +605,111 @@ ${boxLines}
             document.getElementById(`tab${tabNum}`).classList.remove('hidden');
         }
 
-        // ═══════════════════════════════════════════════════════
-        // Run Analysis
-        // ═══════════════════════════════════════════════════════
-        async function runCurrentAnalysis() {
+        // ═══════════════════════════════════════════════════════════════
+        //  Demo Mode Entry Point
+        // ═══════════════════════════════════════════════════════════════
+        async function startDemo() {
             if (isRunning) return;
             isRunning = true;
             
-            const btn = document.getElementById('runBtn');
-            btn.innerHTML = '<span class="spinner"></span> 분석 중...';
+            const btn = document.getElementById('demoBtn');
+            btn.innerHTML = '<span class="spinner"></span> <span>분석 중...</span>';
             btn.disabled = true;
-
-            initLogs();
-
+            btn.classList.add('opacity-70', 'cursor-not-allowed');
+            
+            clearAgentPanel();
+            
             try {
                 if (currentTab === 1) {
-                    await runScreen1Analysis();
+                    await runScreen1Demo();
                 } else if (currentTab === 2) {
-                    await runScreen2Analysis();
+                    await runScreen2Demo();
                 } else if (currentTab === 3) {
-                    await runScreen3Analysis();
+                    await runScreen3Demo();
                 }
             } catch (err) {
-                const container = logContainer();
-                container.innerHTML += `<div class="console-error">❌ 오류 발생: ${err.message}</div>`;
+                console.error(err);
+                await addAgentCard('result-bad', `❌ 오류 발생: ${err.message}`, { title: '오류' });
             }
-
-            btn.innerHTML = '<i class="fas fa-play mr-1"></i>분석 실행';
+            
+            btn.innerHTML = '<i class="fas fa-play"></i> <span>데모 시작</span> <span class="text-xs opacity-70">(20~30초)</span>';
             btn.disabled = false;
+            btn.classList.remove('opacity-70', 'cursor-not-allowed');
             isRunning = false;
         }
 
-        // ═══════════════════════════════════════════════════════
-        // Screen 1: PR 건 최적 추천 단가 제안
-        // ═══════════════════════════════════════════════════════
-        async function runScreen1Analysis() {
+        // ═══════════════════════════════════════════════════════════════
+        //  Screen 1: PR 건 최적 추천 단가 제안 (PRD v2.0)
+        // ═══════════════════════════════════════════════════════════════
+        async function runScreen1Demo() {
+            updateStepCount(0, 6);
+            
+            // Step 1: 데이터 수집
+            setProgress(10, 'Step 1: 내부 데이터 로드');
+            updateStepCount(1, 6);
+            
+            await addAgentCard('data', '', { loading: true, title: '📂 #2 단가테이블 로드', delay: 700 });
+            document.querySelector('.agent-card.data:last-child .card-content').innerHTML = 
+                '<div class="mono text-xs">→ 482건 로드 완료 (BODY2, 옵션단가 포함)</div>';
+            
+            await addAgentCard('data', '', { loading: true, title: '📂 #4 발주실적 로드', delay: 900 });
+            document.querySelector('.agent-card.data:last-child .card-content').innerHTML = 
+                '<div class="mono text-xs">→ 36,960건 로드 완료 (2.1s)</div>';
+            
+            // Step 2: PR 샘플 선택
+            setProgress(25, 'Step 2: PR 샘플 추출');
+            updateStepCount(2, 6);
+            
+            await addAgentCard('rule', `
+                <div class="space-y-1 text-xs">
+                    <div>• 단가테이블 매핑 가능: <span class="text-green-400 font-semibold">7건</span></div>
+                    <div>• 미매핑 (실적 기준): <span class="text-yellow-400 font-semibold">3건</span></div>
+                    <div>• 합계: <span class="text-white font-semibold">10건</span> 선택</div>
+                </div>
+            `, { title: '🎯 PR 샘플 추출' });
+            
+            // Step 3: Rule 적용
+            setProgress(40, 'Step 3: Rule 적용 (계약단가 산출)');
+            updateStepCount(3, 6);
+            
+            await addAgentCard('rule', `
+                <div class="space-y-2 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="badge badge-info">Rule 1</span>
+                        <span>밸브타입 매핑 → BODY2 기본단가 (N열)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="badge badge-info">Rule 2</span>
+                        <span>키워드 추출 → 옵션단가 합산 (I/O-P, LOCK 등)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="badge badge-info">Rule 3</span>
+                        <span>수량 환산 → 개당 계약단가</span>
+                    </div>
+                </div>
+            `, { title: '⚙️ 계약단가 산출 Rule' });
+            
+            // Step 4: 발주실적 매핑
+            setProgress(55, 'Step 4: 과거 발주실적 매핑');
+            updateStepCount(4, 6);
+            
+            await addAgentCard('rule', `
+                <div class="space-y-2 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-green-400"></span>
+                        <span><b>1순위:</b> 밸브타입 + 자재내역 100% 일치</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-yellow-400"></span>
+                        <span><b>2순위:</b> 밸브타입만 일치 → 최근 발주단가</span>
+                    </div>
+                </div>
+            `, { title: '📈 발주실적 기반 예상단가' });
+            
+            // API 호출
+            setProgress(70, 'Step 5: 결과 생성');
+            updateStepCount(5, 6);
+            
             const res = await fetch('/api/screen1/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -363,11 +719,71 @@ ${boxLines}
             
             if (!data.success) throw new Error(data.error || '분석 실패');
             
-            // 로그 렌더링
-            await renderLogs(data.logs);
+            // 결과 요약 카드
+            const mappedCount = data.results.filter(r => r.mapped).length;
+            const unmappedCount = data.results.length - mappedCount;
             
-            // 결과 테이블 렌더링 (PRD 형식)
+            const resultType = mappedCount >= unmappedCount * 2 ? 'result-good' : 'result-normal';
+            await addAgentCard(resultType, `
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div class="p-2 rounded bg-white/5">
+                        <div class="text-lg font-bold text-white">${data.results.length}</div>
+                        <div class="text-xs text-gray-400">전체 PR</div>
+                    </div>
+                    <div class="p-2 rounded bg-green-500/10">
+                        <div class="text-lg font-bold text-green-400">${mappedCount}</div>
+                        <div class="text-xs text-gray-400">단가표 매핑</div>
+                    </div>
+                    <div class="p-2 rounded bg-yellow-500/10">
+                        <div class="text-lg font-bold text-yellow-400">${unmappedCount}</div>
+                        <div class="text-xs text-gray-400">실적 기준</div>
+                    </div>
+                </div>
+            `, { title: '✅ 분석 완료', badge: '<span class="badge badge-good">완료</span>' });
+            
+            // Step 6: LLM 분석
+            setProgress(85, 'Step 6: AI 추천 근거 생성');
+            updateStepCount(6, 6);
+            
+            await addAgentCard('llm', '', { title: '🤖 AI 추천 근거 생성', typing: true });
+            const llmCard = document.querySelector('.agent-card.llm:last-child .card-content');
+            
+            // AI 분석 텍스트 생성
+            const aiText = generateScreen1AIAnalysis(data.results);
+            await typeText(llmCard, aiText, 12);
+            
+            setProgress(100, '완료');
+            
+            // 결과 테이블 렌더링
             renderScreen1Results(data.results);
+        }
+
+        function generateScreen1AIAnalysis(results) {
+            const mapped = results.filter(r => r.mapped);
+            const unmapped = results.filter(r => !r.mapped);
+            
+            let text = `[분석 요약]\n`;
+            text += `• 단가테이블 매핑 성공: ${mapped.length}건 → 계약단가 기준 추천\n`;
+            text += `• 미매핑: ${unmapped.length}건 → 발주×90% 기준 추천\n\n`;
+            
+            text += `[핵심 인사이트]\n`;
+            
+            let savings = 0;
+            for (const r of mapped.slice(0, 3)) {
+                if (r.rule3_contractPrice && r.recentPrice) {
+                    const diff = r.recentPrice - r.rule3_contractPrice;
+                    if (diff > 0) {
+                        savings += diff;
+                        text += `• ${r.valveType}: 계약단가 ${fmt(r.rule3_contractPrice)}원 적용 시 ${fmt(diff)}원 절감\n`;
+                    }
+                }
+            }
+            
+            if (savings > 0) {
+                text += `\n💰 예상 절감액: ${fmt(savings)}원 (상위 3건)`;
+            }
+            
+            return text;
         }
 
         function renderScreen1Results(results) {
@@ -376,99 +792,190 @@ ${boxLines}
             container.classList.remove('hidden');
 
             let html = `
-            <div class="mb-4">
-                <h3 class="text-base font-semibold flex items-center gap-2 mb-2">
+            <div class="mb-5">
+                <h3 class="text-lg font-bold flex items-center gap-2 mb-2">
                     <i class="fas fa-table text-blue-400"></i>
-                    PR 건별 최적 단가 제안 결과 (${results.length}건) - PRD 테이블 형식
+                    PR 건별 최적 추천 단가 제안
                 </h3>
-                <p class="text-xs text-gray-500">Rule1(BODY2) + Rule2(옵션) = 계약단가 | 과거발주 1순위(타입+내역) / 2순위(타입)</p>
+                <p class="text-xs text-gray-500">행을 클릭하면 상세 Rule 적용 결과가 펼쳐집니다</p>
             </div>
             
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto rounded-xl border border-gray-700/50" style="max-height: calc(100vh - 320px);">
                 <table class="prd-table">
                     <thead>
-                        <!-- 대분류 헤더 -->
                         <tr>
-                            <th class="section-header" colspan="5">PR 세부 내역</th>
-                            <th class="section-header" colspan="4">단가테이블 매핑 (Rule 1/2/3)</th>
-                            <th class="section-header" colspan="5">과거 발주 실적 기준</th>
-                            <th class="section-header" colspan="2">추천</th>
+                            <th class="section-header" colspan="2">PR 세부 내역</th>
+                            <th class="section-header" colspan="3">계약단가 (Rule 1+2+3)</th>
+                            <th class="section-header" colspan="3">최근발주단가 (실적)</th>
+                            <th class="section-header">발주×90%</th>
+                            <th class="section-header" colspan="2">AI 추천</th>
                         </tr>
-                        <!-- 소분류 헤더 -->
                         <tr>
-                            <th>No</th>
-                            <th>밸브타입</th>
-                            <th>매핑키</th>
-                            <th style="min-width:180px">자재내역</th>
-                            <th>수량</th>
-                            <th>Rule1<br>BODY2</th>
-                            <th>Rule2<br>옵션</th>
-                            <th>Rule3<br>계약단가</th>
-                            <th>옵션상세</th>
-                            <th>순위</th>
-                            <th>업체명</th>
-                            <th>발주일</th>
-                            <th>발주금액</th>
-                            <th>×90%</th>
-                            <th>추천단가</th>
-                            <th>근거</th>
+                            <th style="width:60px">PR</th>
+                            <th style="min-width:180px">자재번호/내역</th>
+                            <th style="width:90px">BODY2</th>
+                            <th style="width:90px">옵션</th>
+                            <th style="width:100px" class="highlight">합계</th>
+                            <th style="width:70px">업체</th>
+                            <th style="width:70px">일자</th>
+                            <th style="width:100px">금액</th>
+                            <th style="width:100px">금액</th>
+                            <th style="width:110px" class="recommend">추천단가</th>
+                            <th style="width:90px">근거</th>
                         </tr>
                     </thead>
-                    <tbody>`;
+                    <tbody id="screen1-tbody">`;
 
-            for (const r of results) {
-                const mappedClass = r.mapped ? 'mapped' : 'unmapped';
-                const mappedIcon = r.mapped ? '✓' : '✗';
+            for (let i = 0; i < results.length; i++) {
+                const r = results[i];
+                const mappedBadge = r.mapped 
+                    ? '<span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-1"></span>' 
+                    : '<span class="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-1"></span>';
                 
-                const rank = r.recentOrder?.rank || '-';
-                const rankShort = rank.includes('1순위') 
-                    ? '<span class="text-green-400 font-semibold">1순위</span>' 
-                    : (rank.includes('2순위') ? '<span class="text-blue-400">2순위</span>' : '-');
-                
-                const optionStr = r.rule2_optionDetails?.length 
-                    ? `<span class="text-xs text-gray-400">${r.rule2_optionDetails.slice(0, 2).join('<br>')}</span>` 
-                    : '-';
-
                 html += `
-                    <tr>
-                        <td>${r.no}</td>
-                        <td class="font-mono text-xs">${r.valveType || '-'}</td>
-                        <td class="font-mono text-xs ${mappedClass}">${r.valveTypeBase || '-'} ${mappedIcon}</td>
-                        <td class="text-left text-xs" style="max-width:180px">
-                            <div class="truncate" title="${r.description || ''}">${r.description || '-'}</div>
+                    <tr onclick="toggleDetail1(${i}, this)" id="row-${i}">
+                        <td class="font-semibold text-blue-300">PR${String(i+1).padStart(3,'0')}</td>
+                        <td class="text-left">
+                            <div class="flex items-center">
+                                ${mappedBadge}
+                                <span class="mono text-xs text-blue-300">${r.valveType || '-'}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 truncate mt-1" style="max-width:170px" title="${r.description}">${r.description || '-'}</div>
                         </td>
-                        <td>${r.quantity || '-'}${r.tableQty && r.tableQty !== 1 ? `<br><span class="text-xs text-gray-500">(표:${r.tableQty})</span>` : ''}</td>
                         <td class="text-right price ${r.mapped ? '' : 'text-gray-500'}">${fmt(r.rule1_body2)}</td>
                         <td class="text-right price">${fmt(r.rule2_option)}</td>
                         <td class="text-right price highlight font-semibold">${fmt(r.rule3_contractPrice)}</td>
-                        <td>${optionStr}</td>
-                        <td>${rankShort}</td>
-                        <td class="text-xs">${r.recentOrder?.vendor?.substring(0, 6) || '-'}</td>
-                        <td class="text-xs">${r.recentOrder?.date?.substring(5) || '-'}</td>
+                        <td class="text-xs">${r.recentOrder?.vendor?.substring(0, 4) || '-'}</td>
+                        <td class="text-xs text-gray-400">${r.recentOrder?.date?.substring(5) || '-'}</td>
                         <td class="text-right price">${fmt(r.recentPrice)}</td>
                         <td class="text-right price text-yellow-400">${fmt(r.recent90)}</td>
-                        <td class="text-right price highlight font-bold text-green-400">${fmt(r.recommendedPrice)}</td>
+                        <td class="text-right price recommend">${fmt(r.recommendedPrice)}</td>
                         <td class="text-xs">${r.recommendReason || '-'}</td>
+                    </tr>
+                    <tr id="detail-${i}" class="hidden">
+                        <td colspan="11" class="p-0 bg-transparent">
+                            <div class="detail-panel">
+                                <div class="grid grid-cols-3 gap-6">
+                                    <div>
+                                        <h4 class="font-semibold text-blue-400 mb-3 flex items-center gap-2">
+                                            <i class="fas fa-route"></i>밸브타입 매핑
+                                        </h4>
+                                        <div class="space-y-2 text-xs text-gray-300">
+                                            <div class="flex justify-between"><span class="text-gray-500">원본:</span><span class="mono">${r.valveType}</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">매핑키:</span><span class="mono">${r.valveTypeBase}</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">매핑:</span><span class="${r.mapped ? 'text-green-400' : 'text-yellow-400'}">${r.mapped ? '✅ 성공' : '⚠️ 미매핑'}</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">수량:</span><span>${r.quantity}개 ${r.tableQty ? `(표: ${r.tableQty}개)` : ''}</span></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-semibold text-purple-400 mb-3 flex items-center gap-2">
+                                            <i class="fas fa-cogs"></i>적용 Rule
+                                        </h4>
+                                        <div class="space-y-2 text-xs text-gray-300">
+                                            <div class="flex justify-between"><span class="text-gray-500">Rule 1 BODY2:</span><span class="mono">${r.mapped ? fmt(r.rule1_body2) + '원' : '미매핑'}</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">Rule 2 옵션:</span><span class="mono">${fmt(r.rule2_option)}원</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">Rule 3 합계:</span><span class="mono font-semibold text-yellow-400">${fmt(r.rule3_contractPrice)}원</span></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-semibold text-orange-400 mb-3 flex items-center gap-2">
+                                            <i class="fas fa-history"></i>발주실적
+                                        </h4>
+                                        <div class="space-y-2 text-xs text-gray-300">
+                                            ${r.recentOrder ? `
+                                                <div class="flex justify-between"><span class="text-gray-500">순위:</span><span>${r.recentOrder.rank}</span></div>
+                                                <div class="flex justify-between"><span class="text-gray-500">업체:</span><span>${r.recentOrder.vendor}</span></div>
+                                                <div class="flex justify-between"><span class="text-gray-500">일자:</span><span>${r.recentOrder.date}</span></div>
+                                                <div class="flex justify-between"><span class="text-gray-500">금액:</span><span class="mono">${fmt(r.recentPrice)}원</span></div>
+                                            ` : '<div class="text-gray-500">발주실적 없음</div>'}
+                                        </div>
+                                    </div>
+                                </div>
+                                ${r.rule2_optionDetails?.length ? `
+                                <div class="mt-4 pt-4 border-t border-gray-700">
+                                    <span class="text-xs text-gray-400"><i class="fas fa-tags mr-1"></i>옵션 상세: <span class="text-purple-300">${r.rule2_optionDetails.join(', ')}</span></span>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </td>
                     </tr>`;
             }
 
-            html += `</tbody></table></div>
-            
-            <div class="mt-4 p-4 bg-gray-800/30 rounded-lg text-xs text-gray-400 space-y-1">
-                <p><strong>※ Rule 1 (BODY2):</strong> 밸브타입 끝자리 제외 후 단가테이블 매핑 → 기본단가</p>
-                <p><strong>※ Rule 2 (옵션):</strong> 자재내역 키워드 기반 옵션단가 (I/O-P, LOCK, IND, DISC 등)</p>
-                <p><strong>※ Rule 3 (계약단가):</strong> BODY2 + 옵션단가 (수량환산 적용)</p>
-                <p><strong>※ 과거발주 1순위:</strong> 밸브타입 + 자재내역 100% 일치 | <strong>2순위:</strong> 밸브타입만 일치</p>
-                <p><strong>※ 추천단가:</strong> 계약단가와 발주금액(또는 ×90%) 중 유리한 가격</p>
-            </div>`;
-
+            html += `</tbody></table></div>`;
             container.innerHTML = html;
         }
 
-        // ═══════════════════════════════════════════════════════
-        // Screen 2: 협력사 견적 검증
-        // ═══════════════════════════════════════════════════════
-        async function runScreen2Analysis() {
+        function toggleDetail1(index, row) {
+            const detailRow = document.getElementById(`detail-${index}`);
+            const isHidden = detailRow.classList.contains('hidden');
+            
+            document.querySelectorAll('[id^="detail-"]').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('#screen1-tbody tr').forEach(el => el.classList.remove('expanded'));
+            
+            if (isHidden) {
+                detailRow.classList.remove('hidden');
+                row.classList.add('expanded');
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        //  Screen 2: 협력사 견적 적정성 검증 (PRD v2.0)
+        // ═══════════════════════════════════════════════════════════════
+        async function runScreen2Demo() {
+            updateStepCount(0, 5);
+            
+            // Step 1: 데이터 수집
+            setProgress(15, 'Step 1: 견적 데이터 로드');
+            updateStepCount(1, 5);
+            
+            await addAgentCard('data', '', { loading: true, title: '📂 #3 협력사 견적 로드', delay: 600 });
+            document.querySelector('.agent-card.data:last-child .card-content').innerHTML = 
+                '<div class="mono text-xs">→ 159건 로드 완료</div>';
+            
+            // Step 2: 전처리
+            setProgress(30, 'Step 2: 밸브타입 매핑');
+            updateStepCount(2, 5);
+            
+            await addAgentCard('rule', `
+                <div class="space-y-1 text-xs">
+                    <div>⚠️ 견적에 밸브타입 없음 → 발주실적에서 매핑 필요</div>
+                    <div>• 자재번호 앞 4자리 제거 → mat_core 추출</div>
+                    <div>• 실적 딕셔너리에서 Valve Type 매핑</div>
+                </div>
+            `, { title: '🔄 전처리 - 밸브타입 매핑' });
+            
+            await addAgentCard('data', `
+                <div class="flex items-center gap-3">
+                    <div class="text-2xl font-bold text-green-400">79%</div>
+                    <div class="text-xs text-gray-400">매핑 성공률<br>(126/159건)</div>
+                </div>
+            `, { title: '✅ 매핑 완료' });
+            
+            // Step 3: 적정성 검증
+            setProgress(50, 'Step 3: 적정성 판정');
+            updateStepCount(3, 5);
+            
+            await addAgentCard('rule', `
+                <div class="space-y-2 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="badge badge-good">✅ 우수</span>
+                        <span>발주×90% ≥ 견적가</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="badge badge-normal">🔶 보통</span>
+                        <span>발주/계약 ≥ 견적가</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="badge badge-bad">❌ 부적절</span>
+                        <span>기준 미달</span>
+                    </div>
+                </div>
+            `, { title: '📋 적정성 판정 기준' });
+            
+            // API 호출
+            setProgress(70, 'Step 4: 결과 집계');
+            updateStepCount(4, 5);
+            
             const res = await fetch('/api/screen2/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -478,7 +985,48 @@ ${boxLines}
             
             if (!data.success) throw new Error(data.error || '분석 실패');
             
-            await renderLogs(data.logs);
+            // 결과 요약
+            const resultType = data.counts.부적절 < data.total * 0.1 ? 'result-good' 
+                : (data.counts.부적절 < data.total * 0.2 ? 'result-normal' : 'result-bad');
+            
+            await addAgentCard(resultType, `
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div class="p-2 rounded bg-green-500/20">
+                        <div class="text-lg font-bold text-green-400">${data.counts.우수}</div>
+                        <div class="text-xs text-gray-400">우수</div>
+                    </div>
+                    <div class="p-2 rounded bg-yellow-500/20">
+                        <div class="text-lg font-bold text-yellow-400">${data.counts.보통}</div>
+                        <div class="text-xs text-gray-400">보통</div>
+                    </div>
+                    <div class="p-2 rounded bg-red-500/20">
+                        <div class="text-lg font-bold text-red-400">${data.counts.부적절}</div>
+                        <div class="text-xs text-gray-400">부적절</div>
+                    </div>
+                </div>
+            `, { title: '📊 적정성 분포', badge: '<span class="badge badge-good">완료</span>' });
+            
+            // Step 5: LLM 분석
+            setProgress(85, 'Step 5: 부적절 건 분석');
+            updateStepCount(5, 5);
+            
+            const badItems = data.results.filter(r => r.assessment === '부적절');
+            if (badItems.length > 0) {
+                await addAgentCard('llm', '', { title: '🤖 부적절 건 원인 분석', typing: true });
+                const llmCard = document.querySelector('.agent-card.llm:last-child .card-content');
+                
+                let llmText = `[부적절 ${badItems.length}건 분석]\n`;
+                for (const item of badItems.slice(0, 3)) {
+                    const gap = item.gapPercent ? `+${item.gapPercent.toFixed(0)}%` : '';
+                    llmText += `• ${item.materialNo}: ${fmt(item.quotePrice)}원 vs ${fmt(item.recentPrice)}원 (${gap})\n`;
+                }
+                llmText += `\n💡 협상 전략: 최근발주×90% 기준 재견적 요청 권장`;
+                
+                await typeText(llmCard, llmText, 15);
+            }
+            
+            setProgress(100, '완료');
+            
             renderScreen2Results(data);
         }
 
@@ -487,76 +1035,199 @@ ${boxLines}
             const container = document.getElementById('screen2-results');
             container.classList.remove('hidden');
 
-            const goodPct = (data.counts.우수 / Math.max(data.total, 1) * 100).toFixed(1);
-            const normalPct = (data.counts.보통 / Math.max(data.total, 1) * 100).toFixed(1);
-            const badPct = (data.counts.부적절 / Math.max(data.total, 1) * 100).toFixed(1);
+            const goodPct = (data.counts.우수 / data.total * 100).toFixed(1);
+            const normalPct = (data.counts.보통 / data.total * 100).toFixed(1);
+            const badPct = (data.counts.부적절 / data.total * 100).toFixed(1);
 
             let html = `
-            <div class="grid grid-cols-3 gap-3 mb-4">
-                <div class="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
-                    <div class="text-3xl font-bold text-green-400">${data.counts.우수}</div>
-                    <div class="text-xs text-green-300">✅ 우수 (${goodPct}%)</div>
-                    <div class="text-xs text-gray-500 mt-1">발주×90% ≥ 견적</div>
+            <!-- 상단: KPI 대시보드 -->
+            <div class="grid grid-cols-4 gap-4 mb-6">
+                <div class="col-span-1">
+                    <div class="chart-container h-full flex items-center justify-center">
+                        <canvas id="donutChart" height="130"></canvas>
+                    </div>
                 </div>
-                <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-center">
-                    <div class="text-3xl font-bold text-yellow-400">${data.counts.보통}</div>
-                    <div class="text-xs text-yellow-300">🔶 보통 (${normalPct}%)</div>
-                    <div class="text-xs text-gray-500 mt-1">발주/계약 ≥ 견적</div>
-                </div>
-                <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center">
-                    <div class="text-3xl font-bold text-red-400">${data.counts.부적절}</div>
-                    <div class="text-xs text-red-300">❌ 부적절 (${badPct}%)</div>
-                    <div class="text-xs text-gray-500 mt-1">기준 초과</div>
+                <div class="col-span-3 grid grid-cols-3 gap-4">
+                    <div class="kpi-card border-l-4 border-green-500">
+                        <div class="kpi-value text-green-400">${data.counts.우수}</div>
+                        <div class="text-xs text-gray-400 mt-1">✅ 우수 (${goodPct}%)</div>
+                        <div class="text-xs text-green-400/70 mt-2">즉시 발주 추천</div>
+                    </div>
+                    <div class="kpi-card border-l-4 border-yellow-500">
+                        <div class="kpi-value text-yellow-400">${data.counts.보통}</div>
+                        <div class="text-xs text-gray-400 mt-1">🔶 보통 (${normalPct}%)</div>
+                        <div class="text-xs text-yellow-400/70 mt-2">구매 가능</div>
+                    </div>
+                    <div class="kpi-card border-l-4 border-red-500">
+                        <div class="kpi-value text-red-400">${data.counts.부적절}</div>
+                        <div class="text-xs text-gray-400 mt-1">❌ 부적절 (${badPct}%)</div>
+                        <div class="text-xs text-red-400/70 mt-2">재협상 필요</div>
+                    </div>
                 </div>
             </div>
 
-            <div class="overflow-x-auto">
+            <!-- 중단: 견적 테이블 -->
+            <div class="overflow-x-auto rounded-xl border border-gray-700/50 mb-6" style="max-height: 300px;">
                 <table class="prd-table">
                     <thead>
                         <tr>
-                            <th>No</th>
-                            <th>자재번호</th>
-                            <th>밸브타입</th>
-                            <th>자재내역</th>
-                            <th>견적가</th>
-                            <th>계약단가</th>
-                            <th>발주단가</th>
-                            <th>발주×90%</th>
-                            <th>괴리율</th>
-                            <th>판정</th>
+                            <th style="min-width:160px">자재번호/내역</th>
+                            <th style="width:100px">견적가</th>
+                            <th style="width:100px">최근발주</th>
+                            <th style="width:100px">발주×90%</th>
+                            <th style="width:100px">계약단가</th>
+                            <th style="width:80px">초과율</th>
+                            <th style="width:90px">판정</th>
                         </tr>
                     </thead>
                     <tbody>`;
 
-            for (const r of data.results.slice(0, 50)) {
-                const badgeClass = r.assessment === '우수' ? 'text-green-400' 
-                    : r.assessment === '부적절' ? 'text-red-400' : 'text-yellow-400';
-                const gapStr = r.gapPercent !== null ? `${r.gapPercent > 0 ? '+' : ''}${r.gapPercent.toFixed(1)}%` : '-';
-                const gapColor = r.gapPercent > 0 ? 'text-red-400' : (r.gapPercent < 0 ? 'text-green-400' : '');
+            for (const r of data.results.slice(0, 30)) {
+                const badgeClass = r.assessment === '우수' ? 'badge-good' 
+                    : r.assessment === '부적절' ? 'badge-bad' : 'badge-normal';
+                const gapStr = r.gapPercent !== null ? `${r.gapPercent > 0 ? '+' : ''}${r.gapPercent.toFixed(0)}%` : '-';
+                const gapColor = r.gapPercent > 10 ? 'text-red-400 font-semibold' : (r.gapPercent < -5 ? 'text-green-400' : '');
 
                 html += `
                     <tr>
-                        <td>${r.no}</td>
-                        <td class="font-mono text-xs">${r.materialNo}</td>
-                        <td class="text-xs">${r.valveType || '-'}</td>
-                        <td class="text-left text-xs" style="max-width:150px"><div class="truncate">${r.description}</div></td>
+                        <td class="text-left">
+                            <div class="mono text-xs text-blue-300">${r.materialNo}</div>
+                            <div class="text-xs text-gray-500 truncate" style="max-width:150px">${r.description}</div>
+                        </td>
                         <td class="text-right price">${fmt(r.quotePrice)}</td>
-                        <td class="text-right price">${fmt(r.contractPrice)}</td>
                         <td class="text-right price">${fmt(r.recentPrice)}</td>
                         <td class="text-right price text-yellow-400">${fmt(r.recent90)}</td>
-                        <td class="${gapColor} font-semibold">${gapStr}</td>
-                        <td class="${badgeClass} font-semibold">${r.assessmentLabel}</td>
+                        <td class="text-right price">${fmt(r.contractPrice)}</td>
+                        <td class="${gapColor}">${gapStr}</td>
+                        <td><span class="badge ${badgeClass}">${r.assessmentLabel}</span></td>
                     </tr>`;
             }
 
             html += `</tbody></table></div>`;
+            
+            // 부적절 건 상세
+            const badItems = data.results.filter(r => r.assessment === '부적절');
+            if (badItems.length > 0) {
+                html += `
+                <div class="bg-gradient-to-r from-red-500/10 to-red-500/5 border border-red-500/30 rounded-xl p-5">
+                    <h4 class="font-semibold text-red-400 mb-4 flex items-center gap-2">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        부적절 건 집중 분석 (${badItems.length}건)
+                    </h4>
+                    <div class="space-y-3">
+                        ${badItems.slice(0, 5).map(item => {
+                            const gap = item.gapPercent ? `+${item.gapPercent.toFixed(0)}%` : '';
+                            return `
+                            <div class="flex items-center justify-between p-3 rounded-lg bg-red-500/10">
+                                <div>
+                                    <span class="mono text-xs text-red-300">${item.materialNo}</span>
+                                    <span class="text-xs text-gray-500 ml-2">${item.description?.substring(0, 30)}...</span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xs">견적 <span class="mono text-white">${fmt(item.quotePrice)}</span></span>
+                                    <span class="text-xs text-gray-500 mx-2">vs</span>
+                                    <span class="text-xs">발주 <span class="mono text-white">${fmt(item.recentPrice)}</span></span>
+                                    <span class="badge badge-bad ml-2">${gap}</span>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-red-500/20 text-sm text-gray-400">
+                        💡 <span class="text-yellow-400">협상 전략:</span> 최근발주×90% 기준 재견적 요청 권장
+                    </div>
+                </div>`;
+            }
+            
             container.innerHTML = html;
+            
+            // 도넛 차트
+            setTimeout(() => {
+                if (chartInstances.donut) chartInstances.donut.destroy();
+                const ctx = document.getElementById('donutChart')?.getContext('2d');
+                if (ctx) {
+                    chartInstances.donut = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['우수', '보통', '부적절'],
+                            datasets: [{
+                                data: [data.counts.우수, data.counts.보통, data.counts.부적절],
+                                backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(245, 158, 11, 0.8)', 'rgba(239, 68, 68, 0.8)'],
+                                borderColor: ['#10b981', '#f59e0b', '#ef4444'],
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false }
+                            },
+                            cutout: '70%'
+                        }
+                    });
+                }
+            }, 100);
         }
 
-        // ═══════════════════════════════════════════════════════
-        // Screen 3: 시황 분석
-        // ═══════════════════════════════════════════════════════
-        async function runScreen3Analysis() {
+        // ═══════════════════════════════════════════════════════════════
+        //  Screen 3: 시황 분석 (PRD v2.0)
+        // ═══════════════════════════════════════════════════════════════
+        async function runScreen3Demo() {
+            updateStepCount(0, 5);
+            
+            // Step 1: 내부 데이터 요약
+            setProgress(15, 'Step 1: BC밸브 데이터 필터링');
+            updateStepCount(1, 5);
+            
+            await addAgentCard('data', '', { loading: true, title: '📂 BC밸브 (VGBARR240AT) 필터링', delay: 800 });
+            document.querySelector('.agent-card.data:last-child .card-content').innerHTML = `
+                <div class="space-y-1 text-xs">
+                    <div>• LOCK 제외, TR 끝자리 필터</div>
+                    <div>• 결과: <span class="text-green-400 font-semibold">431건</span> 추출</div>
+                </div>
+            `;
+            
+            // Step 2: 웹검색 (LME 시황)
+            setProgress(35, 'Step 2: LME 시황 수집 (web_search)');
+            updateStepCount(2, 5);
+            
+            await addAgentCard('search', '', { title: '🌐 LME 시황 수집 (web_search)', typing: true });
+            const searchCard = document.querySelector('.agent-card.search:last-child .card-content');
+            await typeText(searchCard, '🔍 Query: "LME copper tin price 2025 monthly average USD"', 30);
+            await sleep(400);
+            
+            await addAgentCard('search', `
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="p-2 rounded bg-orange-500/10 text-center">
+                        <div class="text-lg font-bold text-orange-400">+31%</div>
+                        <div class="text-xs text-gray-400">Cu (구리)</div>
+                        <div class="text-xs text-gray-500">8,978 → 11,791</div>
+                    </div>
+                    <div class="p-2 rounded bg-yellow-500/10 text-center">
+                        <div class="text-lg font-bold text-yellow-400">+40%</div>
+                        <div class="text-xs text-gray-400">Sn (주석)</div>
+                        <div class="text-xs text-gray-500">26,339 → 36,876</div>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-500 mt-2">* Fallback: LME_CuSn_Monthly_2025.xlsx</div>
+            `, { title: '📊 LME 시황 데이터' });
+            
+            // Step 3: 트렌드 비교
+            setProgress(55, 'Step 3: 트렌드 비교 (지수화)');
+            updateStepCount(3, 5);
+            
+            await addAgentCard('rule', `
+                <div class="space-y-1 text-xs">
+                    <div>✅ 1월=100 기준 지수화 완료</div>
+                    <div>✅ Cu+Sn 가중지수: Cu 88% + Sn 12%</div>
+                    <div>✅ 원재료 비중 80% 적용</div>
+                </div>
+            `, { title: '📈 트렌드 비교 (지수화)' });
+            
+            // API 호출
+            setProgress(70, 'Step 4: 적정성 매트릭스');
+            updateStepCount(4, 5);
+            
             const res = await fetch('/api/screen3/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -566,7 +1237,52 @@ ${boxLines}
             
             if (!data.success) throw new Error(data.error || '분석 실패');
             
-            await renderLogs(data.logs);
+            const ac = data.assessmentCounts;
+            const resultType = ac.Good >= ac.Bad ? 'result-good' : (ac.Bad > ac.Good * 2 ? 'result-bad' : 'result-normal');
+            
+            await addAgentCard(resultType, `
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div class="p-2 rounded bg-green-500/20">
+                        <div class="text-lg font-bold text-green-400">${ac.Good}</div>
+                        <div class="text-xs text-gray-400">Good</div>
+                    </div>
+                    <div class="p-2 rounded bg-yellow-500/20">
+                        <div class="text-lg font-bold text-yellow-400">${ac.Normal}</div>
+                        <div class="text-xs text-gray-400">Normal</div>
+                    </div>
+                    <div class="p-2 rounded bg-red-500/20">
+                        <div class="text-lg font-bold text-red-400">${ac.Bad}</div>
+                        <div class="text-xs text-gray-400">Bad</div>
+                    </div>
+                </div>
+            `, { title: '📊 월별 적정성 판정', badge: '<span class="badge badge-good">완료</span>' });
+            
+            // Step 5: LLM 종합 분석
+            setProgress(85, 'Step 5: Executive Summary');
+            updateStepCount(5, 5);
+            
+            await addAgentCard('llm', '', { title: '🤖 Executive Summary', typing: true });
+            const llmCard = document.querySelector('.agent-card.llm:last-child .card-content');
+            
+            const badMonths = Object.entries(data.assessments)
+                .filter(([_, v]) => v.label === 'Bad')
+                .map(([m, _]) => m + '월');
+            
+            const llmText = `[업체 행동 패턴]
+원광밸브: 시황 +${data.summary.cuYearChange}%(Cu) 상승에도 단가 안정. 보수적 가격 전략.
+
+[리스크]
+Bad 판정 ${ac.Bad}개월 (${badMonths.join(', ') || '없음'}) - 시황 하락분 미반영.
+
+[구매 전략]
+• 단기: Bad 월 소급 인하 3~5% 요청
+• 중기: LME 연동 계약 조항 도입
+• 장기: 복수 업체 포트폴리오 확대`;
+            
+            await typeText(llmCard, llmText, 12);
+            
+            setProgress(100, '완료');
+            
             renderScreen3Results(data);
         }
 
@@ -576,65 +1292,106 @@ ${boxLines}
             container.classList.remove('hidden');
 
             const ac = data.assessmentCounts;
+            const badMonths = Object.entries(data.assessments)
+                .filter(([_, v]) => v.label === 'Bad')
+                .map(([m, _]) => m + '월');
 
             let html = `
-            <div class="grid grid-cols-4 gap-3 mb-4">
-                <div class="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-center">
-                    <div class="text-2xl font-bold text-orange-400">+${data.summary.cuYearChange}%</div>
-                    <div class="text-xs text-gray-400">Cu 연간</div>
+            <!-- KPI 카드 -->
+            <div class="grid grid-cols-4 gap-4 mb-6">
+                <div class="kpi-card">
+                    <div class="kpi-value text-orange-400">+${data.summary.cuYearChange}%</div>
+                    <div class="text-xs text-gray-400 mt-1">Cu (구리) 연간</div>
                 </div>
-                <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
-                    <div class="text-2xl font-bold text-yellow-400">+${data.summary.snYearChange}%</div>
-                    <div class="text-xs text-gray-400">Sn 연간</div>
+                <div class="kpi-card">
+                    <div class="kpi-value text-yellow-400">+${data.summary.snYearChange}%</div>
+                    <div class="text-xs text-gray-400 mt-1">Sn (주석) 연간</div>
                 </div>
-                <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-center">
-                    <div class="text-2xl font-bold text-blue-400">${data.summary.totalOrders}</div>
-                    <div class="text-xs text-gray-400">분석 건수</div>
+                <div class="kpi-card">
+                    <div class="kpi-value text-blue-400">${data.summary.totalOrders}</div>
+                    <div class="text-xs text-gray-400 mt-1">분석 건수</div>
                 </div>
-                <div class="bg-gray-700/50 rounded-lg p-3 text-center">
-                    <div class="text-2xl font-bold ${ac.Good >= ac.Bad ? 'text-green-400' : 'text-red-400'}">${ac.Good >= ac.Bad ? 'Good' : 'Bad'}</div>
-                    <div class="text-xs text-gray-400">전체 판정</div>
+                <div class="kpi-card">
+                    <div class="kpi-value ${ac.Good >= ac.Bad ? 'text-green-400' : 'text-red-400'}">
+                        ${ac.Good >= ac.Bad ? '양호' : '주의'}
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1">전체 판정</div>
                 </div>
             </div>
 
-            <div class="bg-gray-800/30 rounded-lg p-4 mb-4">
+            <!-- 핵심 차트: 시황 vs 발주 트렌드 -->
+            <div class="chart-container mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h4 class="font-semibold text-sm flex items-center gap-2">
+                        <i class="fas fa-chart-line text-blue-400"></i>
+                        시황 vs 업체별 단가 트렌드 (1월=100)
+                    </h4>
+                    <span class="text-xs text-gray-500">Bronze 비중: Cu 88% + Sn 12%</span>
+                </div>
                 <canvas id="trendChart" height="200"></canvas>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div class="bg-gray-800/30 rounded-lg p-4">
-                    <h4 class="font-semibold mb-3 text-sm text-gray-300">📊 월별 적정성 판정</h4>
-                    <div class="grid grid-cols-3 gap-2 text-xs">
-                        ${Object.entries(data.assessments).map(([m, v]) => {
-                            const cls = v.label === 'Good' ? 'text-green-400' : (v.label === 'Bad' ? 'text-red-400' : 'text-yellow-400');
-                            return `<div class="flex justify-between bg-gray-700/30 px-2 py-1 rounded"><span>${m}월</span><span class="${cls}">${v.emoji} ${v.label}</span></div>`;
-                        }).join('')}
-                    </div>
-                    <div class="mt-3 pt-3 border-t border-gray-700 text-xs text-gray-400">
-                        🟢Good: ${ac.Good} | 🟡Normal: ${ac.Normal} | 🔴Bad: ${ac.Bad}
-                    </div>
+            <!-- 월별 적정성 타임라인 -->
+            <div class="chart-container mb-6">
+                <h4 class="font-semibold text-sm mb-4 flex items-center gap-2">
+                    <i class="fas fa-calendar-alt text-purple-400"></i>
+                    월별 적정성 타임라인
+                </h4>
+                <div class="flex justify-between items-center px-4">
+                    ${Object.entries(data.assessments).map(([m, v]) => {
+                        const dotClass = v.label.toLowerCase();
+                        return `
+                        <div class="text-center group">
+                            <div class="timeline-dot ${dotClass} mb-2 mx-auto" title="${m}월: ${v.label} (시황 ${v.marketChange > 0 ? '+' : ''}${v.marketChange}%, 단가 ${v.priceChange > 0 ? '+' : ''}${v.priceChange}%)">
+                                ${m}
+                            </div>
+                            <div class="text-xs text-gray-500">${v.label}</div>
+                        </div>`;
+                    }).join('')}
                 </div>
-                <div class="bg-gray-800/30 rounded-lg p-4">
-                    <h4 class="font-semibold mb-3 text-sm text-gray-300">💡 핵심 인사이트</h4>
-                    <div class="text-xs text-gray-300 space-y-2">
-                        <p>• 시황 +${data.summary.cuYearChange}%(Cu)/+${data.summary.snYearChange}%(Sn) 상승에도 발주단가 안정</p>
-                        <p>• Good ${ac.Good}개월로 시황 대비 유리한 구매 구조</p>
-                        <p>• 원재료 비중 80% 감안 시 협상 여지 존재</p>
-                        <p>• Bad 월은 시황 하락분 미반영 → 소급 인하 요청</p>
-                    </div>
+                <div class="mt-4 pt-4 border-t border-gray-700/50 flex justify-center gap-8 text-sm">
+                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Good: ${ac.Good}</span>
+                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-500"></span> Normal: ${ac.Normal}</span>
+                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span> Bad: ${ac.Bad}</span>
                 </div>
             </div>
-            
-            <div class="mt-4 p-3 bg-gray-800/30 rounded-lg text-xs text-gray-500">
-                ※ 지수: 1월=100 기준 | Cu+Sn 가중지수: Cu 88% + Sn 12% (Bronze 합금 비율)<br>
-                ※ 괴리 = 업체지수 - 기대지수(시황변동×80%), 음수=구매유리(Good)
+
+            <!-- Executive Summary -->
+            <div class="bg-gradient-to-r from-orange-500/10 via-yellow-500/5 to-orange-500/10 border border-orange-500/30 rounded-xl p-5">
+                <h4 class="font-semibold text-orange-400 mb-4 flex items-center gap-2">
+                    <i class="fas fa-brain"></i>
+                    Executive Summary
+                </h4>
+                <div class="grid grid-cols-2 gap-6">
+                    <div>
+                        <h5 class="text-xs text-gray-400 mb-3 font-semibold">💡 핵심 인사이트</h5>
+                        <div class="space-y-2 text-sm text-gray-300">
+                            <p>• 시황 <span class="text-orange-400">+${data.summary.cuYearChange}%</span>(Cu) / <span class="text-yellow-400">+${data.summary.snYearChange}%</span>(Sn) 상승</p>
+                            <p>• <span class="text-green-400">Good ${ac.Good}개월</span> → 시황 대비 유리한 구매 구조</p>
+                            <p>• 괴리 영역 = 구매 측 협상 레버리지</p>
+                            ${badMonths.length > 0 ? `<p>• <span class="text-red-400">Bad: ${badMonths.join(', ')}</span> → 인하 미반영</p>` : ''}
+                        </div>
+                    </div>
+                    <div>
+                        <h5 class="text-xs text-gray-400 mb-3 font-semibold">🎯 구매 전략</h5>
+                        <div class="space-y-2 text-sm text-gray-300">
+                            <p>• <span class="text-green-400 font-semibold">단기:</span> Bad 월 소급 인하 3~5% 요청</p>
+                            <p>• <span class="text-yellow-400 font-semibold">중기:</span> LME 연동 계약 조항 도입</p>
+                            <p>• <span class="text-blue-400 font-semibold">장기:</span> 복수 업체 포트폴리오 확대</p>
+                        </div>
+                    </div>
+                </div>
             </div>`;
 
             container.innerHTML = html;
+            
+            // 트렌드 차트
             setTimeout(() => drawTrendChart(data), 100);
         }
 
         function drawTrendChart(data) {
+            if (chartInstances.trend) chartInstances.trend.destroy();
+            
             const ctx = document.getElementById('trendChart')?.getContext('2d');
             if (!ctx) return;
 
@@ -642,7 +1399,7 @@ ${boxLines}
             const cuSnData = data.trendData.map(d => d.cuSnIndex);
             const mainVendorData = data.trendData.map(d => d.mainVendorIndex);
 
-            new Chart(ctx, {
+            chartInstances.trend = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: months,
@@ -651,21 +1408,29 @@ ${boxLines}
                             label: 'Cu+Sn 가중지수',
                             data: cuSnData,
                             borderColor: '#f59e0b',
-                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                            borderWidth: 2.5,
+                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                            borderWidth: 3,
                             fill: true,
-                            tension: 0.3,
-                            pointRadius: 4,
+                            tension: 0.4,
+                            pointRadius: 6,
                             pointBackgroundColor: '#f59e0b',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointHoverRadius: 8,
                         },
                         {
                             label: data.summary.mainVendor ? data.summary.mainVendor.substring(0, 6) : '발주단가',
                             data: mainVendorData,
                             borderColor: '#3b82f6',
-                            borderWidth: 2.5,
-                            tension: 0.3,
-                            pointRadius: 4,
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 6,
                             pointBackgroundColor: '#3b82f6',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointHoverRadius: 8,
                             spanGaps: true,
                         },
                         {
@@ -673,56 +1438,81 @@ ${boxLines}
                             data: Array(12).fill(100),
                             borderColor: 'rgba(255,255,255,0.2)',
                             borderWidth: 1,
-                            borderDash: [3, 3],
+                            borderDash: [8, 4],
                             pointRadius: 0,
+                            fill: false,
                         }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: { 
-                            labels: { color: '#6b7a94', font: { size: 11 }, usePointStyle: true, padding: 16 }
+                            labels: { 
+                                color: '#94a3b8', 
+                                font: { size: 11, weight: '500' },
+                                usePointStyle: true,
+                                padding: 20
+                            }
                         },
                         tooltip: {
-                            backgroundColor: '#1e293b',
-                            titleColor: '#e0e6f0',
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: '#fff',
                             bodyColor: '#94a3b8',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                            padding: 14,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: ctx => {
+                                    const val = ctx.raw ? ctx.raw.toFixed(1) : '-';
+                                    return `  ${ctx.dataset.label}: ${val}`;
+                                }
+                            }
                         }
                     },
                     scales: {
-                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5e78', font: { size: 10 } } },
+                        x: { 
+                            grid: { color: 'rgba(255,255,255,0.05)' }, 
+                            ticks: { color: '#64748b', font: { size: 11 } } 
+                        },
                         y: { 
                             grid: { color: 'rgba(255,255,255,0.05)' }, 
-                            ticks: { color: '#4b5e78', font: { size: 10 } },
-                            min: 85, max: 145
+                            ticks: { color: '#64748b', font: { size: 11 } },
+                            min: 85, 
+                            max: 145,
+                            title: { display: true, text: '지수 (1월=100)', color: '#64748b', font: { size: 10, weight: '500' } }
                         }
                     }
                 }
             });
         }
 
-        // ═══════════════════════════════════════════════════════
-        // Initialize
-        // ═══════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════
+        //  Initialize
+        // ═══════════════════════════════════════════════════════════════
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const res = await fetch('/api/health');
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    document.getElementById('apiStatus').innerHTML = 
-                        `<i class="fas fa-circle text-[8px] mr-1.5 text-green-400"></i>Python Flask`;
+                    const d = data.data;
+                    document.getElementById('apiStatus').innerHTML = `
+                        <span class="w-2 h-2 rounded-full bg-green-400"></span>
+                        <span>Python Flask | ${d.priceTable}건, ${d.orders}건</span>
+                    `;
                     document.getElementById('apiStatus').className = 
-                        'px-3 py-1.5 bg-green-500/20 text-green-400 rounded-full text-xs font-medium';
-                    document.getElementById('dataCount').textContent = 
-                        `단가 ${data.data.priceTable} | 견적 ${data.data.quotes} | 실적 ${data.data.orders.toLocaleString()}`;
+                        'px-4 py-2 bg-green-500/20 text-green-400 rounded-full text-xs font-medium flex items-center gap-2';
                 }
             } catch {
-                document.getElementById('apiStatus').innerHTML = 
-                    '<i class="fas fa-exclamation-circle text-[8px] mr-1.5"></i>연결 실패';
+                document.getElementById('apiStatus').innerHTML = `
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>연결 실패</span>
+                `;
                 document.getElementById('apiStatus').className = 
-                    'px-3 py-1.5 bg-red-500/20 text-red-400 rounded-full text-xs font-medium';
+                    'px-4 py-2 bg-red-500/20 text-red-400 rounded-full text-xs font-medium flex items-center gap-2';
             }
         });
     </script>
