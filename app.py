@@ -256,18 +256,18 @@ def screen1_analyze():
     logs.append({'type': 'info', 'text': '본가(BODY2) + 옵션단가 + 수량환산 → 계약단가'})
     logs.append({'type': 'info', 'text': '과거 실적 최근 발주단가 (1순위: 타입+내역일치, 2순위: 타입만)'})
     
-    # PR 전체 데이터 선택 (시황 분석 대상 전체)
+    # PR 대상 데이터: VGBARR240A (BC밸브, PRD v2.0 명시)
     logs.append({'type': 'subheader', 'text': 'Step 1: PR 데이터 추출'})
     
-    # Valve Type이 있는 모든 데이터를 대상으로 함
-    pr_all = df4[df4['Valve Type'].notna()].drop_duplicates('Valve Type').sort_values('발주일', ascending=False).copy()
+    # VGBARR240A로 시작하는 BC밸브 데이터 (PRD v2.0 기준 ~654건)
+    pr_all = df4[df4['Valve Type'].str.startswith('VGBARR240A', na=False)].sort_values('발주일', ascending=False).copy()
     
     # 매핑 가능 여부 분류
     pr_all['mappable'] = pr_all['Valve Type'].apply(lambda x: str(x)[:-1] in p_idx if pd.notna(x) else False)
     mapped_count = int(pr_all['mappable'].sum())
     unmapped_count = int(len(pr_all) - mapped_count)
     
-    logs.append({'type': 'success', 'text': f'전체 {len(pr_all)}건 (매핑 가능 {mapped_count}건 + 미매핑 {unmapped_count}건)'})
+    logs.append({'type': 'success', 'text': f'BC밸브(VGBARR240A) {len(pr_all)}건 (매핑 {mapped_count}건 + 미매핑 {unmapped_count}건)'})
     
     logs.append({'type': 'subheader', 'text': 'Step 2: PR 건별 단가 분석'})
     
