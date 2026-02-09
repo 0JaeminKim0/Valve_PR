@@ -14,12 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 소스 복사
 COPY . .
 
-# 포트 설정
-EXPOSE 3000
-
 # 환경 변수
-ENV PORT=3000
 ENV PYTHONUNBUFFERED=1
 
-# 실행
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:3000", "--workers", "2", "--timeout", "120"]
+# 실행 (shell form으로 $PORT 환경변수 사용)
+CMD gunicorn app:app --bind 0.0.0.0:${PORT:-3000} --workers 2 --timeout 120
