@@ -476,7 +476,8 @@ def screen3_analyze():
     logs = []
     
     logs.append({'type': 'header', 'text': '📋 화면 3: 원재료 시황 × 발주단가 종합 분석'})
-    logs.append({'type': 'info', 'text': '🌐 LME 시황 vs 업체별 발주단가 트렌드 (4개월 시차 적용)'})
+    logs.append({'type': 'info', 'text': '🌐 LME 시황(원/kg) vs 업체 단가(원/kg) 비교 (4개월 시차)'})
+    logs.append({'type': 'info', 'text': '📌 단가 기준: 발주금액 ÷ 총중량(kg) = 원/kg'})
     
     # BC밸브 필터링
     bc = df4[df4['Valve Type'].str.startswith('VGBARR240A', na=False)].copy()
@@ -484,8 +485,10 @@ def screen3_analyze():
     bc = bc[~bc['dc'].str.contains('LOCK', na=False)]
     bc = bc[bc['dc'].str.endswith('TR', na=False)]
     bc['M'] = pd.to_datetime(bc['발주일']).dt.month
-    bc['단가'] = bc['발주금액(KRW)-변환'] / bc['발주수량'].replace(0, np.nan)
-    mv = bc.groupby(['발주업체', 'M']).agg(avg=('단가', 'mean'), n=('단가', 'count')).reset_index()
+    # kg당 단가 계산: 발주금액 / (총중량TN * 1000) = 원/kg
+    bc['총중량kg'] = bc['발주총중량(TN)'].fillna(0) * 1000
+    bc['단가_kg'] = bc['발주금액(KRW)-변환'] / bc['총중량kg'].replace(0, np.nan)
+    mv = bc.groupby(['발주업체', 'M']).agg(avg=('단가_kg', 'mean'), n=('단가_kg', 'count')).reset_index()
     
     vendors = list(mv['발주업체'].unique())
     logs.append({'type': 'success', 'text': f'BC밸브: {len(bc)}건 | 업체: {", ".join([v[:6] for v in vendors])}'})
@@ -581,7 +584,7 @@ def screen3_analyze():
         emoji = '🟢' if gap_pct and gap_pct < -2 else ('🔴' if gap_pct and gap_pct > 2 else '🟡')
         gap_str = f'{emoji}{gap_pct:+.1f}%' if gap_pct else '·'
         main_str = f'{main_price:,.0f}' if main_price else '·'
-        logs.append({'type': 'info', 'text': f'  {m:2d}월 │ Cu+Sn: ${cusn_price:,.0f} │ {main_v[:4] if main_v else "업체"}: ₩{main_str} │ 괴리: {gap_str} {lag_str}'})
+        logs.append({'type': 'info', 'text': f'  {m:2d}월 │ Cu+Sn: {cusn_price:,.0f}원/kg │ {main_v[:4] if main_v else "업체"}: {main_str}원/kg │ 괴리: {gap_str} {lag_str}'})
     
     # 적정성 판정 (4개월 시차 기준)
     logs.append({'type': 'subheader', 'text': 'Step 2: 월별 적정성 판정 (4개월 시차 기준)'})

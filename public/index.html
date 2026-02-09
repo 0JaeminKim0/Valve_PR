@@ -1197,7 +1197,8 @@
             await addAgentCard('rule', `
                 <div class="space-y-1 text-xs">
                     <div>✅ 4개월 시차 적용 (원재료 → 업체단가)</div>
-                    <div>✅ Cu+Sn 가중단가: Cu 88% + Sn 12%</div>
+                    <div>✅ Cu+Sn 가중단가: Cu 88% + Sn 12% (원/kg)</div>
+                    <div>✅ 업체 단가: 발주금액 ÷ 총중량 (원/kg)</div>
                     <div>✅ 원재료 비중 80% 적용</div>
                     <div class="text-gray-400 mt-1">예: 1월 원재료 → 5월 업체 단가</div>
                 </div>
@@ -1305,11 +1306,11 @@ Bad 판정 ${ac.Bad}개월 (${badMonths.join(', ') || '없음'}) - 시황 하락
                         <i class="fas fa-chart-line text-blue-400"></i>
                         원재료 시황 vs 업체 발주단가 (4개월 시차)
                     </h4>
-                    <span class="text-xs text-gray-500">원재료: Cu+Sn 가중 (USD/톤) | 단가: KRW</span>
+                    <span class="text-xs text-gray-500">단위: 원/kg (동일 기준 비교)</span>
                 </div>
                 <canvas id="trendChart" height="200"></canvas>
                 <div class="mt-2 text-xs text-gray-500 text-center">
-                    📌 원재료 1월 시황 → 업체 5월 단가 반영 (4개월 시차 적용)
+                    📌 원재료 1월 시황 → 업체 5월 단가 반영 (4개월 시차 적용) | 업체 단가 = 발주금액 ÷ 총중량(kg)
                 </div>
             </div>
 
@@ -1398,7 +1399,7 @@ Bad 판정 ${ac.Bad}개월 (${badMonths.join(', ') || '없음'}) - 시황 하락
                     labels: months,
                     datasets: [
                         {
-                            label: 'Cu+Sn 가중단가 (USD/톤)',
+                            label: 'Cu+Sn 원재료 (원/kg)',
                             data: cuSnPrices,
                             borderColor: '#f59e0b',
                             backgroundColor: 'rgba(245, 158, 11, 0.15)',
@@ -1413,7 +1414,7 @@ Bad 판정 ${ac.Bad}개월 (${badMonths.join(', ') || '없음'}) - 시황 하락
                             yAxisID: 'y-lme',
                         },
                         {
-                            label: '4개월 전 원재료 (시차 적용)',
+                            label: '4개월 전 원재료 (원/kg)',
                             data: laggedCuSnPrices,
                             borderColor: '#f59e0b',
                             borderWidth: 2,
@@ -1428,7 +1429,7 @@ Bad 판정 ${ac.Bad}개월 (${badMonths.join(', ') || '없음'}) - 시황 하락
                             spanGaps: false,
                         },
                         {
-                            label: data.summary.mainVendor ? data.summary.mainVendor.substring(0, 6) + ' (KRW)' : '발주단가 (KRW)',
+                            label: data.summary.mainVendor ? data.summary.mainVendor.substring(0, 6) + ' 단가 (원/kg)' : '업체 단가 (원/kg)',
                             data: mainVendorPrices,
                             borderColor: '#3b82f6',
                             backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -1470,11 +1471,7 @@ Bad 판정 ${ac.Bad}개월 (${badMonths.join(', ') || '없음'}) - 시황 하락
                                 label: ctx => {
                                     const val = ctx.raw;
                                     if (val === null || val === undefined) return null;
-                                    if (ctx.dataset.yAxisID === 'y-lme') {
-                                        return `  ${ctx.dataset.label}: $${val.toLocaleString()}`;
-                                    } else {
-                                        return `  ${ctx.dataset.label}: ₩${val.toLocaleString()}`;
-                                    }
+                                    return `  ${ctx.dataset.label}: ${val.toLocaleString()}원`;
                                 },
                                 afterBody: (items) => {
                                     const idx = items[0]?.dataIndex;
@@ -1499,11 +1496,11 @@ Bad 판정 ${ac.Bad}개월 (${badMonths.join(', ') || '없음'}) - 시황 하락
                             ticks: { 
                                 color: '#f59e0b', 
                                 font: { size: 10 },
-                                callback: val => '$' + val.toLocaleString()
+                                callback: val => val >= 1000 ? (val / 1000).toFixed(1) + 'K' : val.toLocaleString()
                             },
                             title: {
                                 display: true,
-                                text: 'LME Cu+Sn (USD/톤)',
+                                text: '원재료 (원/kg)',
                                 color: '#f59e0b',
                                 font: { size: 10 }
                             }
@@ -1515,11 +1512,11 @@ Bad 판정 ${ac.Bad}개월 (${badMonths.join(', ') || '없음'}) - 시황 하락
                             ticks: { 
                                 color: '#3b82f6', 
                                 font: { size: 10 },
-                                callback: val => '₩' + (val / 1000).toFixed(0) + 'K'
+                                callback: val => val >= 1000 ? (val / 1000).toFixed(0) + 'K' : val.toLocaleString()
                             },
                             title: {
                                 display: true,
-                                text: '업체 단가 (KRW)',
+                                text: '업체 단가 (원/kg)',
                                 color: '#3b82f6',
                                 font: { size: 10 }
                             }
