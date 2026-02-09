@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>밸브재 구매 AI Agent PoC v2.0</title>
+    <title>밸브재 구매 AI Agent</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
@@ -302,14 +302,13 @@
                         <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
                             밸브재 구매 AI Agent
                         </h1>
-                        <p class="text-gray-400 text-xs">PoC Demo v2.0 — PRD 기반 재설계</p>
+                        <p class="text-gray-400 text-xs">구매 의사결정 지원 시스템</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
                     <button onclick="startDemo()" id="demoBtn" class="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-purple-500/30 flex items-center gap-2">
                         <i class="fas fa-play"></i>
-                        <span>데모 시작</span>
-                        <span class="text-xs opacity-70">(20~30초)</span>
+                        <span>분석 실행</span>
                     </button>
                     <span id="apiStatus" class="px-4 py-2 bg-yellow-500/20 text-yellow-400 rounded-full text-xs font-medium flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full bg-current pulse"></span>
@@ -335,15 +334,15 @@
         <div class="flex gap-3 max-w-[1920px] mx-auto">
             <button onclick="switchTab(1)" class="tab-btn active px-6 py-3 rounded-xl text-sm font-semibold transition-all flex items-center gap-2" data-tab="1">
                 <i class="fas fa-calculator"></i>
-                화면1: PR 최적단가 제안
+                PR 최적단가 제안
             </button>
             <button onclick="switchTab(2)" class="tab-btn px-6 py-3 rounded-xl text-sm font-semibold transition-all bg-gray-700/50 hover:bg-gray-700 flex items-center gap-2" data-tab="2">
                 <i class="fas fa-clipboard-check"></i>
-                화면2: 견적 검증
+                협력사 견적 검증
             </button>
             <button onclick="switchTab(3)" class="tab-btn px-6 py-3 rounded-xl text-sm font-semibold transition-all bg-gray-700/50 hover:bg-gray-700 flex items-center gap-2" data-tab="3">
                 <i class="fas fa-chart-line"></i>
-                화면3: 시황 분석
+                원재료 시황 분석
             </button>
         </div>
     </nav>
@@ -373,10 +372,10 @@
                     <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-800/50 flex items-center justify-center">
                         <i class="fas fa-robot text-4xl opacity-30"></i>
                     </div>
-                    <p class="text-sm font-medium">"데모 시작" 버튼을 클릭하면</p>
-                    <p class="text-sm">Agent가 분석을 시작합니다</p>
+                    <p class="text-sm font-medium">"분석 실행" 버튼을 클릭하면</p>
+                    <p class="text-sm">AI Agent가 분석을 시작합니다</p>
                     <div class="mt-4 text-xs text-gray-600">
-                        <p>데이터 수집 → Rule 적용 → LLM 분석 → 판정</p>
+                        <p>데이터 조회 → 단가 산출 → AI 분석 → 추천</p>
                     </div>
                 </div>
             </div>
@@ -394,16 +393,16 @@
                     <p class="text-xs mt-2 text-gray-600">단가테이블 기반 계약단가 + 과거 발주실적 기반 예상단가</p>
                     <div class="mt-6 grid grid-cols-3 gap-4 max-w-md mx-auto text-xs">
                         <div class="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                            <div class="text-blue-400 font-semibold">Rule 1</div>
-                            <div class="text-gray-500">BODY2 단가</div>
+                            <div class="text-blue-400 font-semibold">기본단가</div>
+                            <div class="text-gray-500">BODY2</div>
                         </div>
                         <div class="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                            <div class="text-purple-400 font-semibold">Rule 2</div>
-                            <div class="text-gray-500">옵션 단가</div>
+                            <div class="text-purple-400 font-semibold">옵션단가</div>
+                            <div class="text-gray-500">I/O-P, LOCK 등</div>
                         </div>
                         <div class="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                            <div class="text-green-400 font-semibold">Rule 3</div>
-                            <div class="text-gray-500">합계 단가</div>
+                            <div class="text-green-400 font-semibold">계약단가</div>
+                            <div class="text-gray-500">합계</div>
                         </div>
                     </div>
                 </div>
@@ -513,7 +512,7 @@
                 case 'rule':
                     icon = 'fa-cogs';
                     iconClass = 'text-purple-400';
-                    title = options.title || 'Rule 적용';
+                    title = options.title || '단가 산출';
                     break;
                 case 'search':
                     icon = 'fa-globe';
@@ -523,7 +522,7 @@
                 case 'llm':
                     icon = 'fa-brain';
                     iconClass = 'text-orange-400';
-                    title = options.title || 'LLM 분석';
+                    title = options.title || 'AI 분석';
                     break;
                 case 'result-good':
                 case 'result-normal':
@@ -632,7 +631,7 @@
                 await addAgentCard('result-bad', `❌ 오류 발생: ${err.message}`, { title: '오류' });
             }
             
-            btn.innerHTML = '<i class="fas fa-play"></i> <span>데모 시작</span> <span class="text-xs opacity-70">(20~30초)</span>';
+            btn.innerHTML = '<i class="fas fa-play"></i> <span>분석 실행</span>';
             btn.disabled = false;
             btn.classList.remove('opacity-70', 'cursor-not-allowed');
             isRunning = false;
@@ -645,19 +644,19 @@
             updateStepCount(0, 6);
             
             // Step 1: 데이터 수집
-            setProgress(10, 'Step 1: 내부 데이터 로드');
+            setProgress(10, '단가테이블 조회');
             updateStepCount(1, 6);
             
-            await addAgentCard('data', '', { loading: true, title: '📂 #2 단가테이블 로드', delay: 700 });
+            await addAgentCard('data', '', { loading: true, title: '택입 단가테이블 조회', delay: 700 });
             document.querySelector('.agent-card.data:last-child .card-content').innerHTML = 
                 '<div class="mono text-xs">→ 482건 로드 완료 (BODY2, 옵션단가 포함)</div>';
             
-            await addAgentCard('data', '', { loading: true, title: '📂 #4 발주실적 로드', delay: 900 });
+            await addAgentCard('data', '', { loading: true, title: '택입 발주실적 조회', delay: 900 });
             document.querySelector('.agent-card.data:last-child .card-content').innerHTML = 
                 '<div class="mono text-xs">→ 36,960건 로드 완료 (2.1s)</div>';
             
             // Step 2: PR 샘플 선택
-            setProgress(25, 'Step 2: PR 샘플 추출');
+            setProgress(25, 'PR 샘플 추출');
             updateStepCount(2, 6);
             
             await addAgentCard('rule', `
@@ -666,31 +665,31 @@
                     <div>• 미매핑 (실적 기준): <span class="text-yellow-400 font-semibold">3건</span></div>
                     <div>• 합계: <span class="text-white font-semibold">10건</span> 선택</div>
                 </div>
-            `, { title: '🎯 PR 샘플 추출' });
+            `, { title: 'PR 샘플 추출' });
             
             // Step 3: Rule 적용
-            setProgress(40, 'Step 3: Rule 적용 (계약단가 산출)');
+            setProgress(40, '계약단가 산출');
             updateStepCount(3, 6);
             
             await addAgentCard('rule', `
                 <div class="space-y-2 text-xs">
                     <div class="flex items-center gap-2">
-                        <span class="badge badge-info">Rule 1</span>
-                        <span>밸브타입 매핑 → BODY2 기본단가 (N열)</span>
+                        <span class="badge badge-info">기본</span>
+                        <span>밸브타입 매핑 → BODY2 기본단가</span>
                     </div>
                     <div class="flex items-center gap-2">
-                        <span class="badge badge-info">Rule 2</span>
+                        <span class="badge badge-info">옵션</span>
                         <span>키워드 추출 → 옵션단가 합산 (I/O-P, LOCK 등)</span>
                     </div>
                     <div class="flex items-center gap-2">
-                        <span class="badge badge-info">Rule 3</span>
+                        <span class="badge badge-info">합계</span>
                         <span>수량 환산 → 개당 계약단가</span>
                     </div>
                 </div>
-            `, { title: '⚙️ 계약단가 산출 Rule' });
+            `, { title: '계약단가 산출 기준' });
             
             // Step 4: 발주실적 매핑
-            setProgress(55, 'Step 4: 과거 발주실적 매핑');
+            setProgress(55, '발주실적 조회');
             updateStepCount(4, 6);
             
             await addAgentCard('rule', `
@@ -704,10 +703,10 @@
                         <span><b>2순위:</b> 밸브타입만 일치 → 최근 발주단가</span>
                     </div>
                 </div>
-            `, { title: '📈 발주실적 기반 예상단가' });
+            `, { title: '발주실적 기반 예상단가' });
             
             // API 호출
-            setProgress(70, 'Step 5: 결과 생성');
+            setProgress(70, '결과 생성');
             updateStepCount(5, 6);
             
             const res = await fetch('/api/screen1/analyze', {
@@ -739,13 +738,13 @@
                         <div class="text-xs text-gray-400">실적 기준</div>
                     </div>
                 </div>
-            `, { title: '✅ 분석 완료', badge: '<span class="badge badge-good">완료</span>' });
+            `, { title: '분석 완료', badge: '<span class="badge badge-good">완료</span>' });
             
             // Step 6: LLM 분석
-            setProgress(85, 'Step 6: AI 추천 근거 생성');
+            setProgress(85, 'AI 추천 근거 생성');
             updateStepCount(6, 6);
             
-            await addAgentCard('llm', '', { title: '🤖 AI 추천 근거 생성', typing: true });
+            await addAgentCard('llm', '', { title: 'AI 추천 근거 생성', typing: true });
             const llmCard = document.querySelector('.agent-card.llm:last-child .card-content');
             
             // AI 분석 텍스트 생성
@@ -797,7 +796,7 @@
                     <i class="fas fa-table text-blue-400"></i>
                     PR 건별 최적 추천 단가 제안
                 </h3>
-                <p class="text-xs text-gray-500">행을 클릭하면 상세 Rule 적용 결과가 펼쳐집니다</p>
+                <p class="text-xs text-gray-500">행을 클릭하면 상세 단가 산출 근거가 펼쳐집니다</p>
             </div>
             
             <div class="overflow-x-auto rounded-xl border border-gray-700/50" style="max-height: calc(100vh - 320px);">
@@ -805,7 +804,7 @@
                     <thead>
                         <tr>
                             <th class="section-header" colspan="2">PR 세부 내역</th>
-                            <th class="section-header" colspan="3">계약단가 (Rule 1+2+3)</th>
+                            <th class="section-header" colspan="3">계약단가 (기본+옵션)</th>
                             <th class="section-header" colspan="3">최근발주단가 (실적)</th>
                             <th class="section-header">발주×90%</th>
                             <th class="section-header" colspan="2">AI 추천</th>
@@ -869,12 +868,12 @@
                                     </div>
                                     <div>
                                         <h4 class="font-semibold text-purple-400 mb-3 flex items-center gap-2">
-                                            <i class="fas fa-cogs"></i>적용 Rule
+                                            <i class="fas fa-cogs"></i>단가 산출 근거
                                         </h4>
                                         <div class="space-y-2 text-xs text-gray-300">
-                                            <div class="flex justify-between"><span class="text-gray-500">Rule 1 BODY2:</span><span class="mono">${r.mapped ? fmt(r.rule1_body2) + '원' : '미매핑'}</span></div>
-                                            <div class="flex justify-between"><span class="text-gray-500">Rule 2 옵션:</span><span class="mono">${fmt(r.rule2_option)}원</span></div>
-                                            <div class="flex justify-between"><span class="text-gray-500">Rule 3 합계:</span><span class="mono font-semibold text-yellow-400">${fmt(r.rule3_contractPrice)}원</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">기본단가 (BODY2):</span><span class="mono">${r.mapped ? fmt(r.rule1_body2) + '원' : '미매핑'}</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">옵션단가:</span><span class="mono">${fmt(r.rule2_option)}원</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">계약단가 합계:</span><span class="mono font-semibold text-yellow-400">${fmt(r.rule3_contractPrice)}원</span></div>
                                         </div>
                                     </div>
                                     <div>
@@ -925,15 +924,15 @@
             updateStepCount(0, 5);
             
             // Step 1: 데이터 수집
-            setProgress(15, 'Step 1: 견적 데이터 로드');
+            setProgress(15, '견적 데이터 조회');
             updateStepCount(1, 5);
             
-            await addAgentCard('data', '', { loading: true, title: '📂 #3 협력사 견적 로드', delay: 600 });
+            await addAgentCard('data', '', { loading: true, title: '협력사 견적 조회', delay: 600 });
             document.querySelector('.agent-card.data:last-child .card-content').innerHTML = 
                 '<div class="mono text-xs">→ 159건 로드 완료</div>';
             
             // Step 2: 전처리
-            setProgress(30, 'Step 2: 밸브타입 매핑');
+            setProgress(30, '밸브타입 매핑');
             updateStepCount(2, 5);
             
             await addAgentCard('rule', `
@@ -942,17 +941,17 @@
                     <div>• 자재번호 앞 4자리 제거 → mat_core 추출</div>
                     <div>• 실적 딕셔너리에서 Valve Type 매핑</div>
                 </div>
-            `, { title: '🔄 전처리 - 밸브타입 매핑' });
+            `, { title: '전처리 - 밸브타입 매핑' });
             
             await addAgentCard('data', `
                 <div class="flex items-center gap-3">
                     <div class="text-2xl font-bold text-green-400">79%</div>
                     <div class="text-xs text-gray-400">매핑 성공률<br>(126/159건)</div>
                 </div>
-            `, { title: '✅ 매핑 완료' });
+            `, { title: '매핑 완료' });
             
             // Step 3: 적정성 검증
-            setProgress(50, 'Step 3: 적정성 판정');
+            setProgress(50, '적정성 판정');
             updateStepCount(3, 5);
             
             await addAgentCard('rule', `
@@ -970,10 +969,10 @@
                         <span>기준 미달</span>
                     </div>
                 </div>
-            `, { title: '📋 적정성 판정 기준' });
+            `, { title: '적정성 판정 기준' });
             
             // API 호출
-            setProgress(70, 'Step 4: 결과 집계');
+            setProgress(70, '결과 집계');
             updateStepCount(4, 5);
             
             const res = await fetch('/api/screen2/analyze', {
@@ -1004,15 +1003,15 @@
                         <div class="text-xs text-gray-400">부적절</div>
                     </div>
                 </div>
-            `, { title: '📊 적정성 분포', badge: '<span class="badge badge-good">완료</span>' });
+            `, { title: '적정성 분포', badge: '<span class="badge badge-good">완료</span>' });
             
             // Step 5: LLM 분석
-            setProgress(85, 'Step 5: 부적절 건 분석');
+            setProgress(85, '부적절 건 분석');
             updateStepCount(5, 5);
             
             const badItems = data.results.filter(r => r.assessment === '부적절');
             if (badItems.length > 0) {
-                await addAgentCard('llm', '', { title: '🤖 부적절 건 원인 분석', typing: true });
+                await addAgentCard('llm', '', { title: '부적절 건 원인 분석', typing: true });
                 const llmCard = document.querySelector('.agent-card.llm:last-child .card-content');
                 
                 let llmText = `[부적절 ${badItems.length}건 분석]\n`;
@@ -1176,10 +1175,10 @@
             updateStepCount(0, 5);
             
             // Step 1: 내부 데이터 요약
-            setProgress(15, 'Step 1: BC밸브 데이터 필터링');
+            setProgress(15, 'BC밸브 데이터 필터링');
             updateStepCount(1, 5);
             
-            await addAgentCard('data', '', { loading: true, title: '📂 BC밸브 (VGBARR240AT) 필터링', delay: 800 });
+            await addAgentCard('data', '', { loading: true, title: 'BC밸브 (VGBARR240AT) 필터링', delay: 800 });
             document.querySelector('.agent-card.data:last-child .card-content').innerHTML = `
                 <div class="space-y-1 text-xs">
                     <div>• LOCK 제외, TR 끝자리 필터</div>
@@ -1188,10 +1187,10 @@
             `;
             
             // Step 2: 웹검색 (LME 시황)
-            setProgress(35, 'Step 2: LME 시황 수집 (web_search)');
+            setProgress(35, 'LME 시황 수집');
             updateStepCount(2, 5);
             
-            await addAgentCard('search', '', { title: '🌐 LME 시황 수집 (web_search)', typing: true });
+            await addAgentCard('search', '', { title: 'LME 시황 수집', typing: true });
             const searchCard = document.querySelector('.agent-card.search:last-child .card-content');
             await typeText(searchCard, '🔍 Query: "LME copper tin price 2025 monthly average USD"', 30);
             await sleep(400);
@@ -1210,10 +1209,10 @@
                     </div>
                 </div>
                 <div class="text-xs text-gray-500 mt-2">* Fallback: LME_CuSn_Monthly_2025.xlsx</div>
-            `, { title: '📊 LME 시황 데이터' });
+            `, { title: 'LME 시황 데이터' });
             
             // Step 3: 트렌드 비교
-            setProgress(55, 'Step 3: 트렌드 비교 (지수화)');
+            setProgress(55, '트렌드 비교');
             updateStepCount(3, 5);
             
             await addAgentCard('rule', `
@@ -1222,10 +1221,10 @@
                     <div>✅ Cu+Sn 가중지수: Cu 88% + Sn 12%</div>
                     <div>✅ 원재료 비중 80% 적용</div>
                 </div>
-            `, { title: '📈 트렌드 비교 (지수화)' });
+            `, { title: '트렌드 비교 (지수화)' });
             
             // API 호출
-            setProgress(70, 'Step 4: 적정성 매트릭스');
+            setProgress(70, '적정성 판정');
             updateStepCount(4, 5);
             
             const res = await fetch('/api/screen3/analyze', {
@@ -1255,13 +1254,13 @@
                         <div class="text-xs text-gray-400">Bad</div>
                     </div>
                 </div>
-            `, { title: '📊 월별 적정성 판정', badge: '<span class="badge badge-good">완료</span>' });
+            `, { title: '월별 적정성 판정', badge: '<span class="badge badge-good">완료</span>' });
             
             // Step 5: LLM 종합 분석
-            setProgress(85, 'Step 5: Executive Summary');
+            setProgress(85, '종합 분석');
             updateStepCount(5, 5);
             
-            await addAgentCard('llm', '', { title: '🤖 Executive Summary', typing: true });
+            await addAgentCard('llm', '', { title: '종합 분석', typing: true });
             const llmCard = document.querySelector('.agent-card.llm:last-child .card-content');
             
             const badMonths = Object.entries(data.assessments)
