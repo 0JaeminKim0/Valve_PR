@@ -1,0 +1,110 @@
+[
+  {
+    "month": 1,
+    "monthLabel": "1월",
+    "cuPricePerTon": 8978.0,
+    "cuPricePerKg": 8.978,
+    "snPricePerTon": 29618.0,
+    "snPricePerKg": 29.618,
+    "source": "ZAMAK일별계산(Cu), Westmetall(Sn)"
+  },
+  {
+    "month": 2,
+    "monthLabel": "2월",
+    "cuPricePerTon": 9329.0,
+    "cuPricePerKg": 9.329,
+    "snPricePerTon": 31876.0,
+    "snPricePerKg": 31.876,
+    "source": "ZAMAK일별계산(Cu), Westmetall(Sn)"
+  },
+  {
+    "month": 3,
+    "monthLabel": "3월",
+    "cuPricePerTon": 9731.0,
+    "cuPricePerKg": 9.731,
+    "snPricePerTon": 34026.0,
+    "snPricePerKg": 34.026,
+    "source": "ZAMAK일별계산(Cu), Westmetall(Sn)"
+  },
+  {
+    "month": 4,
+    "monthLabel": "4월",
+    "cuPricePerTon": 9164.0,
+    "cuPricePerKg": 9.164,
+    "snPricePerTon": 32691.0,
+    "snPricePerKg": 32.691,
+    "source": "ZAMAK일별계산(Cu), Westmetall(Sn)"
+  },
+  {
+    "month": 5,
+    "monthLabel": "5월",
+    "cuPricePerTon": 9531.0,
+    "cuPricePerKg": 9.531,
+    "snPricePerTon": 32144.0,
+    "snPricePerKg": 32.144,
+    "source": "FRED/IMF(Cu), Westmetall(Sn)"
+  },
+  {
+    "month": 6,
+    "monthLabel": "6월",
+    "cuPricePerTon": 9835.0,
+    "cuPricePerKg": 9.835,
+    "snPricePerTon": 32475.0,
+    "snPricePerKg": 32.475,
+    "source": "FRED/IMF(Cu), Westmetall(Sn)"
+  },
+  {
+    "month": 7,
+    "monthLabel": "7월",
+    "cuPricePerTon": 9950.0,
+    "cuPricePerKg": 9.95,
+    "snPricePerTon": 33693.0,
+    "snPricePerKg": 33.693,
+    "source": "FRED/IMF추정(Cu), Westmetall(Sn)"
+  },
+  {
+    "month": 8,
+    "monthLabel": "8월",
+    "cuPricePerTon": 9700.0,
+    "cuPricePerKg": 9.7,
+    "snPricePerTon": 33870.0,
+    "snPricePerKg": 33.87,
+    "source": "FRED/IMF추정(Cu), Westmetall(Sn)"
+  },
+  {
+    "month": 9,
+    "monthLabel": "9월",
+    "cuPricePerTon": 10200.0,
+    "cuPricePerKg": 10.2,
+    "snPricePerTon": 34540.0,
+    "snPricePerKg": 34.54,
+    "source": "FRED/IMF추정(Cu), Westmetall(Sn)"
+  },
+  {
+    "month": 10,
+    "monthLabel": "10월",
+    "cuPricePerTon": 10500.0,
+    "cuPricePerKg": 10.5,
+    "snPricePerTon": 36046.0,
+    "snPricePerKg": 36.046,
+    "source": "FRED/IMF추정(Cu), Westmetall(Sn)"
+  },
+  {
+    "month": 11,
+    "monthLabel": "11월",
+    "cuPricePerTon": 10826.0,
+    "cuPricePerKg": 10.826,
+    "snPricePerTon": 37016.0,
+    "snPricePerKg": 37.016,
+    "source": "Westmetall일별계산(Cu), Westmetall(Sn)"
+  },
+  {
+    "month": 12,
+    "monthLabel": "12월",
+    "cuPricePerTon": 11791.0,
+    "cuPricePerKg": 11.791,
+    "snPricePerTon": 41352.0,
+    "snPricePerKg": 41.352,
+    "source": "FRED/IMF(Cu), Westmetall(Sn)"
+  }
+]

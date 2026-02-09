@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>밸브재 구매 AI Agent PoC</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
+    * { font-family: 'Noto Sans KR', sans-serif; }
+    body { background: #0a0f1a; color: #e0e6f0; }
+    
+    /* 스크롤바 */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+    
+    /* Agent 로그 애니메이션 */
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .agent-log { animation: slideIn 0.3s ease-out; }
+    
+    /* 타이핑 효과 */
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    .typing-cursor::after {
+      content: '▋';
+      animation: blink 0.8s infinite;
+      color: #60a5fa;
+    }
+    
+    /* 글래스모피즘 */
+    .glass {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      backdrop-filter: blur(10px);
+    }
+    
+    /* 배지 */
+    .badge-good { background: rgba(52,211,153,0.15); color: #34d399; }
+    .badge-normal { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .badge-bad { background: rgba(248,113,113,0.15); color: #f87171; }
+    
+    /* 탭 */
+    .tab-btn.active {
+      background: linear-gradient(135deg, rgba(96,165,250,0.2), rgba(167,139,250,0.2));
+      border-color: rgba(96,165,250,0.5);
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div id="app" class="flex flex-col h-screen">
+    <!-- 헤더 -->
+    <header class="glass border-b border-white/10 px-6 py-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            🏭 밸브재 구매 AI Agent
+          </h1>
+          <span class="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 font-medium">PoC Demo</span>
+        </div>
+        <div class="flex items-center gap-3 text-sm text-gray-400">
+          <span id="dataStatus">📊 데이터 로딩중...</span>
+        </div>
+      </div>
+      
+      <!-- 탭 네비게이션 -->
+      <div class="flex gap-2 mt-4">
+        <button class="tab-btn active px-4 py-2 rounded-lg border border-white/10 text-sm font-medium transition-all hover:bg-white/5" data-screen="1">
+          <i class="fas fa-calculator mr-2"></i>PR 단가 제안
+        </button>
+        <button class="tab-btn px-4 py-2 rounded-lg border border-white/10 text-sm font-medium transition-all hover:bg-white/5" data-screen="2">
+          <i class="fas fa-check-circle mr-2"></i>견적 검증
+        </button>
+        <button class="tab-btn px-4 py-2 rounded-lg border border-white/10 text-sm font-medium transition-all hover:bg-white/5" data-screen="3">
+          <i class="fas fa-chart-line mr-2"></i>시황 분석
+        </button>
+      </div>
+    </header>
+    
+    <!-- 메인 컨텐츠 -->
+    <main class="flex-1 flex overflow-hidden">
+      <!-- 좌측: Agent 패널 (40%) -->
+      <div class="w-2/5 border-r border-white/10 flex flex-col">
+        <div class="p-4 border-b border-white/10">
+          <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+            <i class="fas fa-robot mr-2 text-blue-400"></i>Agent Activity
+          </h2>
+        </div>
+        <div id="agentPanel" class="flex-1 overflow-y-auto p-4 space-y-3">
+          <!-- Agent 로그가 여기에 추가됨 -->
+        </div>
+        <div class="p-4 border-t border-white/10">
+          <button id="startAnalysis" class="w-full py-3 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium hover:opacity-90 transition-opacity">
+            <i class="fas fa-play mr-2"></i>분석 시작
+          </button>
+        </div>
+      </div>
+      
+      <!-- 우측: 결과 패널 (60%) -->
+      <div class="w-3/5 flex flex-col overflow-hidden">
+        <div id="resultPanel" class="flex-1 overflow-y-auto p-6">
+          <!-- 화면별 컨텐츠 -->
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <script>
+    // ========== 전역 상태 ==========
+    let currentScreen = 1;
+    let analysisResults = { screen1: null, screen2: null, screen3: null };
+    
+    // ========== 유틸 함수 ==========
+    const fmt = (n) => n ? n.toLocaleString() : '-';
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    
+    // ========== Agent 로그 함수 ==========
+    function addAgentLog(type, message, details = null) {
+      const panel = document.getElementById('agentPanel');
+      const icons = {
+        loading: '<i class="fas fa-spinner fa-spin text-blue-400"></i>',
+        data: '<i class="fas fa-database text-green-400"></i>',
+        rule: '<i class="fas fa-cog text-yellow-400"></i>',
+        search: '<i class="fas fa-search text-purple-400"></i>',
+        llm: '<i class="fas fa-brain text-pink-400"></i>',
+        complete: '<i class="fas fa-check-circle text-green-400"></i>',
+        error: '<i class="fas fa-exclamation-circle text-red-400"></i>',
+      };
+      
+      const log = document.createElement('div');
+      log.className = 'agent-log glass rounded-lg p-3';
+      log.innerHTML = `
+        <div class="flex items-start gap-3">
+          <span class="mt-0.5">${icons[type] || icons.loading}</span>
+          <div class="flex-1">
+            <p class="text-sm text-gray-200">${message}</p>
+            ${details ? `<p class="text-xs text-gray-500 mt-1">${details}</p>` : ''}
+          </div>
+          <span class="text-xs text-gray-600">${new Date().toLocaleTimeString()}</span>
+        </div>
+      `;
+      panel.appendChild(log);
+      panel.scrollTop = panel.scrollHeight;
+    }
+    
+    function clearAgentLogs() {
+      document.getElementById('agentPanel').innerHTML = '';
+    }
+    
+    // ========== 타이핑 효과 ==========
+    async function typeText(element, text, speed = 20) {
+      element.classList.add('typing-cursor');
+      for (const char of text) {
+        element.textContent += char;
+        await sleep(speed);
+      }
+      element.classList.remove('typing-cursor');
+    }
+    
+    // ========== 화면 1: PR 단가 제안 ==========
+    async function runScreen1Analysis() {
+      clearAgentLogs();
+      
+      // Step 1: 데이터 로드
+      addAgentLog('loading', '📂 내부 DB 로드 중...');
+      await sleep(500);
+      addAgentLog('data', '✅ 단가테이블 482건 로드 완료');
+      await sleep(300);
+      addAgentLog('data', '✅ 발주실적 35,722건 로드 완료');
+      await sleep(300);
+      
+      // Step 2: PR 샘플 생성 (데모용)
+      addAgentLog('loading', '🔍 PR 건 분석 대상 선정...');
+      await sleep(500);
+      
+      // API 호출 - 샘플 PR 데이터
+      const samplePRs = [
+        { valveType: 'VGBASW350AT', description: 'GLBE STR FLG SC SS 10K 100A TR I/O-P' },
+        { valveType: 'VGBARR240AT', description: 'GLBE ANG FLG FC BC 5K 50A TR' },
+        { valveType: 'VGTBCC365AT', description: 'GATE N-RISING FLG FC FC 10K 65A' },
+        { valveType: 'VHSBRR350ET', description: 'HOSE VALVE SC BC 10K 65A TR' },
+        { valveType: 'UNKNOWN123', description: 'TEST VALVE TYPE NOT FOUND' },
+      ];
+      
+      addAgentLog('rule', 'Rule 1: 밸브타입 매핑 (끝자리 제거)');
+      await sleep(400);
+      addAgentLog('rule', 'Rule 2: BODY2 단가 산출');
+      await sleep(400);
+      addAgentLog('rule', 'Rule 3: 옵션단가 산출 (I/O-P, LOCK 등)');
+      await sleep(400);
+      
+      try {
+        const response = await fetch('/api/screen1/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: samplePRs }),
+        });
+        const data = await response.json();
+        
+        addAgentLog('complete', `✅ ${data.results.length}건 분석 완료`);
+        analysisResults.screen1 = data.results;
+        
+        // LLM 분석
+        addAgentLog('llm', '🤖 AI Agent 종합 분석 요청...');
+        await sleep(500);
+        
+        const llmResponse = await fetch('/api/screen1/llm-analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ results: data.results }),
+        });
+        const llmData = await llmResponse.json();
+        
+        addAgentLog('complete', '✅ AI 분석 완료', llmData.analysis?.slice(0, 100) + '...');
+        
+        renderScreen1Results(data.results, llmData.analysis);
+      } catch (err) {
+        addAgentLog('error', '❌ 분석 실패', err.message);
+      }
+    }
+    
+    function renderScreen1Results(results, llmAnalysis) {
+      const panel = document.getElementById('resultPanel');
+      panel.innerHTML = `
+        <div class="space-y-6">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold">
+              <i class="fas fa-calculator text-blue-400 mr-2"></i>PR 건 최적 추천 단가 제안
+            </h2>
+            <span class="text-sm text-gray-400">${results.length}건 분석</span>
+          </div>
+          
+          <!-- 결과 테이블 -->
+          <div class="glass rounded-xl overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-white/5">
+                <tr class="text-gray-400 text-left">
+                  <th class="px-4 py-3">밸브타입</th>
+                  <th class="px-4 py-3">BODY2</th>
+                  <th class="px-4 py-3">옵션</th>
+                  <th class="px-4 py-3">계약단가</th>
+                  <th class="px-4 py-3">최근발주</th>
+                  <th class="px-4 py-3">추천단가</th>
+                  <th class="px-4 py-3">상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${results.map((r, i) => `
+                  <tr class="border-t border-white/5 hover:bg-white/5 transition-colors">
+                    <td class="px-4 py-3">
+                      <div class="font-medium text-gray-200">${r.valveType || '-'}</div>
+                      <div class="text-xs text-gray-500">${r.description}</div>
+                    </td>
+                    <td class="px-4 py-3 text-gray-300">${fmt(r.bodyPrice)}</td>
+                    <td class="px-4 py-3">
+                      <div class="text-gray-300">${fmt(r.optionPrice)}</div>
+                      ${r.optionDetails?.length ? `<div class="text-xs text-gray-500">${r.optionDetails.join(', ')}</div>` : ''}
+                    </td>
+                    <td class="px-4 py-3 text-blue-400 font-medium">${fmt(r.contractPrice)}</td>
+                    <td class="px-4 py-3">
+                      ${r.recentOrder ? `
+                        <div class="text-gray-300">${fmt(r.recentPrice)}</div>
+                        <div class="text-xs text-gray-500">${r.recentOrder.vendor?.slice(0, 6)} / ${r.recentOrder.date}</div>
+                      ` : '<span class="text-gray-600">-</span>'}
+                    </td>
+                    <td class="px-4 py-3">
+                      <div class="text-green-400 font-bold">${fmt(r.recommendedPrice)}</div>
+                      <div class="text-xs text-gray-500">${r.recommendReason || ''}</div>
+                    </td>
+                    <td class="px-4 py-3">
+                      ${r.mapped 
+                        ? '<span class="px-2 py-1 rounded text-xs badge-good">매핑됨</span>'
+                        : '<span class="px-2 py-1 rounded text-xs badge-bad">미매핑</span>'}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- AI 분석 결과 -->
+          <div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-semibold text-gray-400 mb-3">
+              <i class="fas fa-brain text-pink-400 mr-2"></i>AI Agent 분석
+            </h3>
+            <div class="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">${llmAnalysis || '분석 대기 중...'}</div>
+          </div>
+        </div>
+      `;
+    }
+    
+    // ========== 화면 2: 견적 검증 ==========
+    async function runScreen2Analysis() {
+      clearAgentLogs();
+      
+      addAgentLog('loading', '📂 협력사 견적 데이터 로드 중...');
+      await sleep(500);
+      addAgentLog('data', '✅ 협력사 견적 159건 로드 완료');
+      await sleep(300);
+      
+      addAgentLog('loading', '🔍 밸브타입 매핑 진행...');
+      await sleep(500);
+      
+      addAgentLog('rule', 'Rule 1: 자재번호 → 밸브타입 변환 (앞 4자리 제거)');
+      await sleep(300);
+      addAgentLog('rule', 'Rule 2: 단가테이블 기반 계약단가 산출');
+      await sleep(300);
+      addAgentLog('rule', 'Rule 3: 발주×90% ≥ 견적 → 우수 판정');
+      await sleep(400);
+      
+      try {
+        const response = await fetch('/api/screen2/verify', { method: 'POST' });
+        const data = await response.json();
+        
+        addAgentLog('complete', `✅ ${data.total}건 검증 완료`);
+        addAgentLog('data', `우수: ${data.counts.excellent} / 보통: ${data.counts.normal} / 부적절: ${data.counts.inadequate}`);
+        
+        analysisResults.screen2 = data;
+        
+        // LLM 분석
+        const inadequateItems = data.results.filter(r => r.assessment === 'inadequate');
+        if (inadequateItems.length > 0) {
+          addAgentLog('llm', '🤖 부적절 항목 분석 요청...');
+          await sleep(500);
+          
+          const llmResponse = await fetch('/api/screen2/llm-analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ counts: data.counts, inadequateItems }),
+          });
+          const llmData = await llmResponse.json();
+          
+          addAgentLog('complete', '✅ 협상 전략 생성 완료');
+          renderScreen2Results(data, llmData.analysis);
+        } else {
+          renderScreen2Results(data, '모든 견적이 적정 수준입니다.');
+        }
+      } catch (err) {
+        addAgentLog('error', '❌ 검증 실패', err.message);
+      }
+    }
+    
+    function renderScreen2Results(data, llmAnalysis) {
+      const panel = document.getElementById('resultPanel');
+      const { results, counts, total } = data;
+      
+      panel.innerHTML = `
+        <div class="space-y-6">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold">
+              <i class="fas fa-check-circle text-green-400 mr-2"></i>협력사 견적 적정성 검증
+            </h2>
+            <span class="text-sm text-gray-400">${total}건 검증</span>
+          </div>
+          
+          <!-- 요약 카드 -->
+          <div class="grid grid-cols-3 gap-4">
+            <div class="glass rounded-xl p-4 text-center">
+              <div class="text-3xl font-bold text-green-400">${counts.excellent}</div>
+              <div class="text-sm text-gray-400 mt-1">✅ 우수</div>
+              <div class="text-xs text-gray-500">발주×90% ≥ 견적</div>
+            </div>
+            <div class="glass rounded-xl p-4 text-center">
+              <div class="text-3xl font-bold text-yellow-400">${counts.normal}</div>
+              <div class="text-sm text-gray-400 mt-1">🔶 보통</div>
+              <div class="text-xs text-gray-500">발주/계약 ≥ 견적</div>
+            </div>
+            <div class="glass rounded-xl p-4 text-center">
+              <div class="text-3xl font-bold text-red-400">${counts.inadequate}</div>
+              <div class="text-sm text-gray-400 mt-1">❌ 부적절</div>
+              <div class="text-xs text-gray-500">재견적 필요</div>
+            </div>
+          </div>
+          
+          <!-- 결과 테이블 -->
+          <div class="glass rounded-xl overflow-hidden max-h-96 overflow-y-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-white/5 sticky top-0">
+                <tr class="text-gray-400 text-left">
+                  <th class="px-4 py-3">자재번호</th>
+                  <th class="px-4 py-3">견적가</th>
+                  <th class="px-4 py-3">계약단가</th>
+                  <th class="px-4 py-3">최근발주</th>
+                  <th class="px-4 py-3">괴리율</th>
+                  <th class="px-4 py-3">판정</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${results.slice(0, 30).map(r => `
+                  <tr class="border-t border-white/5 hover:bg-white/5">
+                    <td class="px-4 py-3">
+                      <div class="font-medium text-gray-200">${r.materialNo}</div>
+                      <div class="text-xs text-gray-500">${r.description}</div>
+                    </td>
+                    <td class="px-4 py-3 text-gray-300">${fmt(r.quotePrice)}</td>
+                    <td class="px-4 py-3 text-blue-400">${fmt(r.contractPrice)}</td>
+                    <td class="px-4 py-3 text-gray-300">${fmt(r.recentPrice)}</td>
+                    <td class="px-4 py-3 ${r.gapPercent > 0 ? 'text-red-400' : 'text-green-400'}">
+                      ${r.gapPercent !== null ? (r.gapPercent > 0 ? '+' : '') + r.gapPercent.toFixed(1) + '%' : '-'}
+                    </td>
+                    <td class="px-4 py-3">
+                      <span class="px-2 py-1 rounded text-xs badge-${r.assessment}">${r.assessmentLabel}</span>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- AI 분석 -->
+          <div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-semibold text-gray-400 mb-3">
+              <i class="fas fa-brain text-pink-400 mr-2"></i>AI Agent 분석 & 협상 전략
+            </h3>
+            <div class="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">${llmAnalysis || '분석 대기 중...'}</div>
+          </div>
+        </div>
+      `;
+    }
+    
+    // ========== 화면 3: 시황 분석 ==========
+    async function runScreen3Analysis() {
+      clearAgentLogs();
+      
+      addAgentLog('loading', '📂 BC밸브 발주 실적 로드 중...');
+      await sleep(500);
+      addAgentLog('data', '✅ VGBARR240AT 654건 로드 완료');
+      await sleep(300);
+      
+      addAgentLog('loading', '🌐 LME 시황 데이터 연동...');
+      await sleep(500);
+      addAgentLog('data', '✅ Cu/Sn 월별 시세 12개월 로드');
+      await sleep(300);
+      
+      addAgentLog('rule', '지수 산출: Cu 88% + Sn 12% 가중 (Bronze 비율)');
+      await sleep(300);
+      addAgentLog('rule', '괴리율 = 업체지수 - 시황기대지수(시황변동×80%)');
+      await sleep(400);
+      
+      try {
+        const response = await fetch('/api/screen3/trend');
+        const data = await response.json();
+        
+        addAgentLog('complete', `✅ 시황 트렌드 분석 완료`);
+        addAgentLog('data', `Good: ${data.assessmentCounts.Good} / Normal: ${data.assessmentCounts.Normal} / Bad: ${data.assessmentCounts.Bad}`);
+        
+        analysisResults.screen3 = data;
+        
+        // LLM 분석
+        addAgentLog('llm', '🤖 구매 전략 분석 요청...');
+        await sleep(500);
+        
+        const llmResponse = await fetch('/api/screen3/llm-analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        const llmData = await llmResponse.json();
+        
+        addAgentLog('complete', '✅ 전략 분석 완료');
+        renderScreen3Results(data, llmData.analysis);
+      } catch (err) {
+        addAgentLog('error', '❌ 분석 실패', err.message);
+      }
+    }
+    
+    function renderScreen3Results(data, llmAnalysis) {
+      const panel = document.getElementById('resultPanel');
+      const { trendData, assessments, assessmentCounts, summary, lmeData } = data;
+      
+      panel.innerHTML = `
+        <div class="space-y-6">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold">
+              <i class="fas fa-chart-line text-purple-400 mr-2"></i>원재료 시황 × 발주단가 트렌드
+            </h2>
+            <div class="flex gap-2">
+              <span class="text-xs px-2 py-1 rounded bg-orange-500/20 text-orange-400">VGBARR240AT</span>
+              <span class="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-400">${summary.totalOrders}건</span>
+            </div>
+          </div>
+          
+          <!-- 요약 카드 -->
+          <div class="grid grid-cols-4 gap-4">
+            <div class="glass rounded-xl p-4 text-center">
+              <div class="text-2xl font-bold text-orange-400">+${summary.cuYearChange}%</div>
+              <div class="text-sm text-gray-400 mt-1">Cu 연간</div>
+            </div>
+            <div class="glass rounded-xl p-4 text-center">
+              <div class="text-2xl font-bold text-yellow-400">+${summary.snYearChange}%</div>
+              <div class="text-sm text-gray-400 mt-1">Sn 연간</div>
+            </div>
+            <div class="glass rounded-xl p-4 text-center">
+              <div class="text-2xl font-bold text-green-400">${assessmentCounts.Good}</div>
+              <div class="text-sm text-gray-400 mt-1">🟢 Good</div>
+            </div>
+            <div class="glass rounded-xl p-4 text-center">
+              <div class="text-2xl font-bold text-red-400">${assessmentCounts.Bad}</div>
+              <div class="text-sm text-gray-400 mt-1">🔴 Bad</div>
+            </div>
+          </div>
+          
+          <!-- 차트 -->
+          <div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-semibold text-gray-400 mb-4">월별 지수 트렌드 (1월 = 100)</h3>
+            <canvas id="trendChart" height="280"></canvas>
+          </div>
+          
+          <!-- 월별 적정성 -->
+          <div class="grid grid-cols-2 gap-4">
+            <div class="glass rounded-xl p-5">
+              <h3 class="text-sm font-semibold text-gray-400 mb-3">월별 적정성 판정</h3>
+              <div class="grid grid-cols-6 gap-2">
+                ${Object.entries(assessments).map(([m, v]) => `
+                  <div class="text-center py-2 rounded ${v === 'Good' ? 'bg-green-500/20' : v === 'Bad' ? 'bg-red-500/20' : 'bg-yellow-500/20'}">
+                    <div class="text-xs text-gray-400">${m}월</div>
+                    <div class="text-sm mt-1">${v === 'Good' ? '🟢' : v === 'Bad' ? '🔴' : '🟡'}</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            
+            <div class="glass rounded-xl p-5">
+              <h3 class="text-sm font-semibold text-gray-400 mb-3">💡 핵심 인사이트</h3>
+              <div class="text-sm text-gray-300 space-y-2">
+                <p>• 시황 +${summary.cuYearChange}%(Cu)/+${summary.snYearChange}%(Sn) 상승에도 발주단가 안정</p>
+                <p>• 시황 대비 유리한 구매 구조 유지 중</p>
+                <p>• 원재료 비중 80% 감안 시, 시황 미반영분 소급 협상 여지</p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- AI 분석 -->
+          <div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-semibold text-gray-400 mb-3">
+              <i class="fas fa-brain text-pink-400 mr-2"></i>AI Agent 전략 분석
+            </h3>
+            <div class="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">${llmAnalysis || '분석 대기 중...'}</div>
+          </div>
+        </div>
+      `;
+      
+      // 차트 렌더링
+      setTimeout(() => renderTrendChart(trendData), 100);
+    }
+    
+    function renderTrendChart(trendData) {
+      const ctx = document.getElementById('trendChart');
+      if (!ctx) return;
+      
+      const months = trendData.map(d => d.monthLabel);
+      const cuSnData = trendData.map(d => d.cuSnIndex);
+      const cuData = trendData.map(d => d.cuIndex);
+      const snData = trendData.map(d => d.snIndex);
+      
+      // 업체별 데이터
+      const wkData = trendData.map(d => d.vendorIndices?.['원광밸브주식회사'] || null);
+      const kgData = trendData.map(d => d.vendorIndices?.['주식회사 금강'] || null);
+      
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: months,
+          datasets: [
+            {
+              label: 'Cu+Sn 가중지수',
+              data: cuSnData,
+              borderColor: '#f59e0b',
+              backgroundColor: 'rgba(245,158,11,0.1)',
+              borderWidth: 2.5,
+              fill: true,
+              tension: 0.3,
+            },
+            {
+              label: 'Cu 지수',
+              data: cuData,
+              borderColor: 'rgba(251,191,36,0.4)',
+              borderWidth: 1,
+              borderDash: [4,4],
+              tension: 0.3,
+              pointRadius: 0,
+            },
+            {
+              label: 'Sn 지수',
+              data: snData,
+              borderColor: 'rgba(253,224,71,0.4)',
+              borderWidth: 1,
+              borderDash: [4,4],
+              tension: 0.3,
+              pointRadius: 0,
+            },
+            {
+              label: '원광밸브',
+              data: wkData,
+              borderColor: '#3b82f6',
+              borderWidth: 2.5,
+              tension: 0.3,
+              spanGaps: true,
+            },
+            {
+              label: '금강',
+              data: kgData,
+              borderColor: '#a78bfa',
+              borderWidth: 2,
+              tension: 0.3,
+              pointStyle: 'rectRot',
+              spanGaps: false,
+            },
+            {
+              label: '기준선 (100)',
+              data: Array(12).fill(100),
+              borderColor: 'rgba(255,255,255,0.15)',
+              borderWidth: 1,
+              borderDash: [2,4],
+              pointRadius: 0,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              labels: { color: '#6b7a94', font: { size: 11 }, usePointStyle: true }
+            }
+          },
+          scales: {
+            x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4b5e78' } },
+            y: {
+              grid: { color: 'rgba(255,255,255,0.04)' },
+              ticks: { color: '#4b5e78' },
+              min: 85, max: 145,
+            }
+          }
+        }
+      });
+    }
+    
+    // ========== 이벤트 핸들러 ==========
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentScreen = parseInt(btn.dataset.screen);
+        
+        // 이미 분석된 결과가 있으면 표시
+        if (currentScreen === 1 && analysisResults.screen1) {
+          renderScreen1Results(analysisResults.screen1, '');
+        } else if (currentScreen === 2 && analysisResults.screen2) {
+          renderScreen2Results(analysisResults.screen2, '');
+        } else if (currentScreen === 3 && analysisResults.screen3) {
+          renderScreen3Results(analysisResults.screen3, '');
+        } else {
+          document.getElementById('resultPanel').innerHTML = `
+            <div class="flex items-center justify-center h-full text-gray-500">
+              <div class="text-center">
+                <i class="fas fa-play-circle text-4xl mb-4"></i>
+                <p>"분석 시작" 버튼을 클릭하세요</p>
+              </div>
+            </div>
+          `;
+        }
+      });
+    });
+    
+    document.getElementById('startAnalysis').addEventListener('click', () => {
+      if (currentScreen === 1) runScreen1Analysis();
+      else if (currentScreen === 2) runScreen2Analysis();
+      else if (currentScreen === 3) runScreen3Analysis();
+    });
+    
+    // ========== 초기화 ==========
+    async function init() {
+      try {
+        const response = await fetch('/api/health');
+        const data = await response.json();
+        document.getElementById('dataStatus').textContent = 
+          `📊 단가 ${data.data.priceTable} | 견적 ${data.data.quotes} | 실적 ${data.data.orders}`;
+      } catch (err) {
+        document.getElementById('dataStatus').textContent = '❌ 서버 연결 실패';
+      }
+      
+      // 초기 화면
+      document.getElementById('resultPanel').innerHTML = `
+        <div class="flex items-center justify-center h-full text-gray-500">
+          <div class="text-center">
+            <i class="fas fa-play-circle text-4xl mb-4"></i>
+            <p>"분석 시작" 버튼을 클릭하세요</p>
+          </div>
+        </div>
+      `;
+    }
+    
+    init();
+  </script>
+</body>
+</html>
