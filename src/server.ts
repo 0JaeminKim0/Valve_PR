@@ -122,7 +122,19 @@ priceTable.forEach(item => {
 });
 
 function getBodyPrice(valveTypeBase: string, qty: number = 1): { unitPrice: number; totalPrice: number; tableQty: number } | null {
-  const item = priceIndexBase[valveTypeBase];
+  // 먼저 정확한 키로 찾기
+  let item = priceIndexBase[valveTypeBase];
+  
+  // 없으면 한 글자 더 제거해서 찾기 (VGBASW3A0A → VGBASW3A0)
+  if (!item && valveTypeBase.length > 0) {
+    item = priceIndexBase[valveTypeBase.slice(0, -1)];
+  }
+  
+  // 그래도 없으면 priceIndex에서 찾기
+  if (!item) {
+    item = priceIndex[valveTypeBase];
+  }
+  
   if (!item) return null;
   const tableQty = item.quantity || 1;
   const unitPrice = tableQty > 0 ? item.bodyPrice / tableQty : item.bodyPrice;
@@ -130,7 +142,19 @@ function getBodyPrice(valveTypeBase: string, qty: number = 1): { unitPrice: numb
 }
 
 function getOptions(valveTypeBase: string, description: string, innerPaint?: string, outerPaint?: string, spec?: string): { total: number; details: string[] } {
-  const item = priceIndexBase[valveTypeBase];
+  // 먼저 정확한 키로 찾기
+  let item = priceIndexBase[valveTypeBase];
+  
+  // 없으면 한 글자 더 제거해서 찾기
+  if (!item && valveTypeBase.length > 0) {
+    item = priceIndexBase[valveTypeBase.slice(0, -1)];
+  }
+  
+  // 그래도 없으면 priceIndex에서 찾기
+  if (!item) {
+    item = priceIndex[valveTypeBase];
+  }
+  
   if (!item) return { total: 0, details: [] };
   
   let total = 0;
@@ -538,7 +562,62 @@ app.post('/api/analyze/market-trend', async (req, res) => {
 // ========== 화면 1: PR 최적 단가 제안 ==========
 app.post('/api/screen1/analyze', async (req, res) => {
   try {
-    const { items } = req.body;
+    let { items } = req.body;
+    
+    // items가 없으면 Python 코드처럼 자동으로 PR 샘플 선택
+    // 매핑되는 것 7건 + 미매핑 3건 = 총 10건
+    if (!items || items.length === 0) {
+      // 단가테이블에 매핑되는 밸브타입 찾기
+      // 발주실적 밸브타입(예: VGBASW3A0AT)에서 끝 2자리 제거 → 단가테이블 베이스(VGBASW3A0)
+      const mappedBases = new Set(priceTable.map(p => p.valveTypeBase));
+      const mappedTypes = new Set(priceTable.map(p => p.valveType));
+      
+      // 매핑 체크 함수 (끝 1~2자리 제거해서 확인)
+      const isMapped = (vt: string) => {
+        if (!vt) return false;
+        const base1 = vt.slice(0, -1);  // VGBASW3A0A
+        const base2 = vt.slice(0, -2);  // VGBASW3A0
+        return mappedTypes.has(base1) || mappedBases.has(base1) || mappedBases.has(base2);
+      };
+      
+      // 매핑되는 PR 샘플 (최근 발주일 기준 정렬)
+      const mappedOrders = orderHistoryAll
+        .filter(o => o.valveType && isMapped(o.valveType))
+        .sort((a, b) => (b.orderDate || '').localeCompare(a.orderDate || ''));
+      
+      // 중복 제거 (밸브타입 기준)
+      const seenTypes = new Set<string>();
+      const uniqueMapped: typeof mappedOrders = [];
+      for (const o of mappedOrders) {
+        if (!seenTypes.has(o.valveType)) {
+          seenTypes.add(o.valveType);
+          uniqueMapped.push(o);
+          if (uniqueMapped.length >= 7) break;
+        }
+      }
+      
+      // 미매핑되는 PR 샘플
+      const unmappedOrders = orderHistoryAll
+        .filter(o => o.valveType && !isMapped(o.valveType))
+        .sort((a, b) => (b.orderDate || '').localeCompare(a.orderDate || ''));
+      
+      const seenUnmapped = new Set<string>();
+      const uniqueUnmapped: typeof unmappedOrders = [];
+      for (const o of unmappedOrders) {
+        if (!seenUnmapped.has(o.valveType)) {
+          seenUnmapped.add(o.valveType);
+          uniqueUnmapped.push(o);
+          if (uniqueUnmapped.length >= 3) break;
+        }
+      }
+      
+      items = [...uniqueMapped, ...uniqueUnmapped].map(o => ({
+        valveType: o.valveType,
+        description: o.description,
+        quantity: o.quantity || 1,
+        materialCore: o.materialCore,
+      }));
+    }
     
     const results = [];
     for (const pr of items || []) {
@@ -571,6 +650,8 @@ app.post('/api/screen1/analyze', async (req, res) => {
         valveType,
         valveTypeBase,
         description: description.slice(0, 60),
+        quantity: pr.quantity || 1,
+        tableQty: bodyResult?.tableQty || null,
         bodyPrice: bodyResult?.unitPrice || null,
         optionPrice: optionResult.total,
         optionDetails: optionResult.details,

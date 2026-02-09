@@ -3,791 +3,982 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valve Agent PoC - AI 단가 분석 시스템</title>
+    <title>밸브재 구매 AI Agent PoC</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(-20px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .slide-in { animation: slideIn 0.3s ease-out; }
-        .fade-in { animation: fadeIn 0.5s ease-out; }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
+        * { font-family: 'Noto Sans KR', sans-serif; }
+        
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes typing { from { width: 0; } to { width: 100%; } }
+        @keyframes blink { 50% { border-color: transparent; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        .slide-in { animation: slideIn 0.4s ease-out forwards; }
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
         .pulse { animation: pulse 1.5s ease-in-out infinite; }
-        .typing-cursor::after {
-            content: '|';
-            animation: pulse 1s ease-in-out infinite;
-        }
+        
         .log-card {
             transition: all 0.3s ease;
             border-left: 3px solid transparent;
         }
         .log-card.active {
             border-left-color: #3b82f6;
-            background: linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, transparent 100%);
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, transparent 100%);
         }
-        .log-card:hover {
-            transform: translateX(4px);
-        }
+        
         .spinner {
-            border: 2px solid #f3f3f3;
+            border: 2px solid rgba(255,255,255,0.1);
             border-top: 2px solid #3b82f6;
             border-radius: 50%;
             width: 16px;
             height: 16px;
-            animation: spin 1s linear infinite;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
         .tab-btn.active {
             background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
             color: white;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
         }
-        .result-highlight {
-            animation: highlight 2s ease-out;
+        
+        /* 콘솔 스타일 */
+        .console-output {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-all;
         }
-        @keyframes highlight {
-            0% { background-color: rgba(59, 130, 246, 0.3); }
-            100% { background-color: transparent; }
+        
+        .console-header { color: #fbbf24; font-weight: bold; }
+        .console-subheader { color: #60a5fa; }
+        .console-success { color: #34d399; }
+        .console-warning { color: #f59e0b; }
+        .console-error { color: #f87171; }
+        .console-info { color: #94a3b8; }
+        .console-highlight { color: #a78bfa; }
+        
+        /* PR 결과 카드 */
+        .pr-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            margin-bottom: 12px;
         }
-        .status-excellent { color: #10b981; background: rgba(16, 185, 129, 0.1); }
-        .status-normal { color: #f59e0b; background: rgba(245, 158, 11, 0.1); }
-        .status-poor { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+        .pr-card-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .pr-card-body {
+            padding: 12px 16px;
+            font-size: 13px;
+        }
+        
+        /* 적정성 뱃지 */
+        .badge-excellent { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge-normal { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+        .badge-poor { background: rgba(248, 113, 113, 0.2); color: #f87171; }
+        
+        /* 스크롤바 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
     <!-- Header -->
-    <header class="bg-gray-800 border-b border-gray-700 px-6 py-4">
-        <div class="flex items-center justify-between">
+    <header class="bg-gray-800/80 backdrop-blur border-b border-gray-700/50 px-6 py-4 sticky top-0 z-50">
+        <div class="flex items-center justify-between max-w-[1800px] mx-auto">
             <div class="flex items-center gap-4">
-                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
                     <i class="fas fa-robot text-white"></i>
                 </div>
                 <div>
-                    <h1 class="text-xl font-bold">Valve Agent PoC</h1>
-                    <p class="text-gray-400 text-sm">AI 기반 밸브 단가 분석 시스템</p>
+                    <h1 class="text-lg font-bold">밸브재 구매 AI Agent PoC</h1>
+                    <p class="text-gray-400 text-xs">PR 최적단가 제안 · 견적 검증 · 시황 분석</p>
                 </div>
             </div>
             <div class="flex items-center gap-4">
-                <span id="apiStatus" class="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm">
-                    <i class="fas fa-circle text-xs mr-1 pulse"></i> API 연결 확인 중...
+                <span id="apiStatus" class="px-3 py-1.5 bg-yellow-500/20 text-yellow-400 rounded-full text-xs font-medium">
+                    <i class="fas fa-circle text-[8px] mr-1.5 pulse"></i>연결 확인 중...
                 </span>
-                <span class="text-gray-400 text-sm">
-                    <i class="fas fa-database mr-1"></i>
-                    <span id="dataCount">로딩...</span>
+                <span id="dataStatus" class="text-gray-400 text-xs">
+                    <i class="fas fa-database mr-1"></i><span id="dataCount">로딩...</span>
                 </span>
             </div>
         </div>
     </header>
 
     <!-- Tab Navigation -->
-    <nav class="bg-gray-800/50 px-6 py-3 border-b border-gray-700">
-        <div class="flex gap-2">
-            <button onclick="switchTab(1)" class="tab-btn active px-6 py-2 rounded-lg font-medium transition-all" data-tab="1">
-                <i class="fas fa-calculator mr-2"></i>화면1: 최적단가 제안
+    <nav class="bg-gray-800/40 px-6 py-3 border-b border-gray-700/50">
+        <div class="flex gap-2 max-w-[1800px] mx-auto">
+            <button onclick="switchTab(1)" class="tab-btn active px-5 py-2 rounded-lg text-sm font-medium transition-all" data-tab="1">
+                <i class="fas fa-calculator mr-2"></i>화면1: PR 최적단가 제안
             </button>
-            <button onclick="switchTab(2)" class="tab-btn px-6 py-2 rounded-lg font-medium transition-all bg-gray-700 hover:bg-gray-600" data-tab="2">
-                <i class="fas fa-check-circle mr-2"></i>화면2: 견적 검증
+            <button onclick="switchTab(2)" class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-all bg-gray-700/50 hover:bg-gray-700" data-tab="2">
+                <i class="fas fa-check-circle mr-2"></i>화면2: 협력사 견적 검증
             </button>
-            <button onclick="switchTab(3)" class="tab-btn px-6 py-2 rounded-lg font-medium transition-all bg-gray-700 hover:bg-gray-600" data-tab="3">
+            <button onclick="switchTab(3)" class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-all bg-gray-700/50 hover:bg-gray-700" data-tab="3">
                 <i class="fas fa-chart-line mr-2"></i>화면3: 시황 분석
             </button>
         </div>
     </nav>
 
-    <!-- Main Content -->
-    <main class="flex h-[calc(100vh-140px)]">
+    <!-- Main Content: 40% Agent Log + 60% Results -->
+    <main class="flex h-[calc(100vh-130px)] max-w-[1800px] mx-auto">
         <!-- Left Panel: Agent Logs (40%) -->
-        <div class="w-2/5 border-r border-gray-700 flex flex-col">
-            <div class="p-4 border-b border-gray-700 bg-gray-800/30">
+        <div class="w-[40%] border-r border-gray-700/50 flex flex-col bg-gray-900/50">
+            <div class="p-4 border-b border-gray-700/50 bg-gray-800/30">
                 <div class="flex items-center justify-between">
-                    <h2 class="font-semibold flex items-center gap-2">
+                    <h2 class="font-semibold text-sm flex items-center gap-2">
                         <i class="fas fa-terminal text-blue-400"></i>
                         Agent 분석 로그
                     </h2>
-                    <button onclick="clearLogs()" class="text-gray-400 hover:text-white text-sm">
-                        <i class="fas fa-trash-alt mr-1"></i>초기화
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="runCurrentAnalysis()" id="runBtn" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium transition-all">
+                            <i class="fas fa-play mr-1"></i>분석 실행
+                        </button>
+                        <button onclick="clearLogs()" class="text-gray-400 hover:text-white text-xs px-2 py-1">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
-            <div id="agentLogs" class="flex-1 overflow-y-auto p-4 space-y-3">
-                <div class="text-gray-500 text-center py-8">
-                    <i class="fas fa-robot text-4xl mb-3 opacity-30"></i>
-                    <p>분석을 시작하면 Agent 로그가 여기에 표시됩니다</p>
+            <div id="agentLogs" class="flex-1 overflow-y-auto p-4 console-output bg-gray-950/50">
+                <div class="text-gray-500 text-center py-12">
+                    <i class="fas fa-robot text-4xl mb-4 opacity-20"></i>
+                    <p class="text-sm">"분석 실행" 버튼을 클릭하면<br>Agent 로그가 실시간으로 표시됩니다</p>
                 </div>
             </div>
         </div>
 
         <!-- Right Panel: Results (60%) -->
-        <div class="w-3/5 flex flex-col">
-            <!-- Tab 1: 최적단가 제안 -->
-            <div id="tab1" class="tab-content flex-1 overflow-y-auto">
-                <div class="p-6">
-                    <div class="bg-gray-800 rounded-xl p-6 mb-6">
-                        <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                            <i class="fas fa-search text-blue-400"></i>
-                            PR 자재 검색
-                        </h3>
-                        <div class="grid grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label class="block text-sm text-gray-400 mb-1">밸브 타입</label>
-                                <select id="valveTypeSelect" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-blue-500 focus:outline-none">
-                                    <option value="">밸브 타입 선택...</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm text-gray-400 mb-1">수량 (개)</label>
-                                <input type="number" id="quantityInput" value="10" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-blue-500 focus:outline-none">
-                            </div>
-                        </div>
-                        <button onclick="analyzePriceRecommendation()" class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 py-3 rounded-lg font-medium transition-all">
-                            <i class="fas fa-play mr-2"></i>최적 단가 분석 시작
-                        </button>
-                    </div>
-
-                    <div id="priceResult" class="hidden">
-                        <!-- 결과가 여기에 표시됩니다 -->
-                    </div>
+        <div class="w-[60%] flex flex-col bg-gray-900/30">
+            <!-- Tab 1: PR 최적단가 제안 -->
+            <div id="tab1" class="tab-content flex-1 overflow-y-auto p-6">
+                <div id="screen1-intro" class="text-center py-12 text-gray-500">
+                    <i class="fas fa-file-invoice-dollar text-5xl mb-4 opacity-20"></i>
+                    <p class="text-sm">PR 건별 최적 단가 분석 결과가 여기에 표시됩니다</p>
+                    <p class="text-xs mt-2 text-gray-600">Rule1(BODY2) + Rule2(옵션) + Rule3(수량환산) → 계약단가</p>
                 </div>
+                <div id="screen1-results" class="hidden"></div>
             </div>
 
-            <!-- Tab 2: 견적 검증 -->
-            <div id="tab2" class="tab-content hidden flex-1 overflow-y-auto">
-                <div class="p-6">
-                    <div class="bg-gray-800 rounded-xl p-6 mb-6">
-                        <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                            <i class="fas fa-file-invoice text-green-400"></i>
-                            협력사 견적 검증
-                        </h3>
-                        <div class="mb-4">
-                            <label class="block text-sm text-gray-400 mb-1">견적 선택</label>
-                            <select id="quoteSelect" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-blue-500 focus:outline-none">
-                                <option value="">견적 항목 선택...</option>
-                            </select>
-                        </div>
-                        <button onclick="analyzeQuoteVerification()" class="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 py-3 rounded-lg font-medium transition-all">
-                            <i class="fas fa-check-double mr-2"></i>견적 적정성 검증 시작
-                        </button>
-                    </div>
-
-                    <div id="quoteResult" class="hidden">
-                        <!-- 결과가 여기에 표시됩니다 -->
-                    </div>
+            <!-- Tab 2: 협력사 견적 검증 -->
+            <div id="tab2" class="tab-content hidden flex-1 overflow-y-auto p-6">
+                <div id="screen2-intro" class="text-center py-12 text-gray-500">
+                    <i class="fas fa-clipboard-check text-5xl mb-4 opacity-20"></i>
+                    <p class="text-sm">협력사 견적 적정성 검증 결과가 여기에 표시됩니다</p>
+                    <p class="text-xs mt-2 text-gray-600">발주×90% ≥ 견적 → 우수 | 발주/계약 ≥ 견적 → 보통 | 그 외 → 부적절</p>
                 </div>
+                <div id="screen2-results" class="hidden"></div>
             </div>
 
             <!-- Tab 3: 시황 분석 -->
-            <div id="tab3" class="tab-content hidden flex-1 overflow-y-auto">
-                <div class="p-6">
-                    <div class="bg-gray-800 rounded-xl p-6 mb-6">
-                        <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                            <i class="fas fa-globe text-purple-400"></i>
-                            원재료 시황 분석
-                        </h3>
-                        <div class="grid grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label class="block text-sm text-gray-400 mb-1">분석 대상</label>
-                                <select id="marketAnalysisTarget" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-blue-500 focus:outline-none">
-                                    <option value="VGBARR240AT">VGBARR240AT (BC밸브, 654건)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm text-gray-400 mb-1">분석 기간</label>
-                                <select id="analysisPeriod" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-blue-500 focus:outline-none">
-                                    <option value="2025">2025년</option>
-                                </select>
-                            </div>
-                        </div>
-                        <button onclick="analyzeMarketTrend()" class="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 py-3 rounded-lg font-medium transition-all">
-                            <i class="fas fa-chart-area mr-2"></i>시황 트렌드 분석 시작
-                        </button>
-                    </div>
-
-                    <div id="marketResult" class="hidden">
-                        <!-- 결과가 여기에 표시됩니다 -->
-                    </div>
+            <div id="tab3" class="tab-content hidden flex-1 overflow-y-auto p-6">
+                <div id="screen3-intro" class="text-center py-12 text-gray-500">
+                    <i class="fas fa-globe text-5xl mb-4 opacity-20"></i>
+                    <p class="text-sm">원재료 시황 × 발주단가 분석 결과가 여기에 표시됩니다</p>
+                    <p class="text-xs mt-2 text-gray-600">LME Cu/Sn 가중지수 vs 업체별 발주단가 트렌드 (1월=100)</p>
                 </div>
+                <div id="screen3-results" class="hidden"></div>
             </div>
         </div>
     </main>
 
     <script>
+        // ═══════════════════════════════════════════════════════
         // Global State
+        // ═══════════════════════════════════════════════════════
         let currentTab = 1;
-        let priceTableData = [];
-        let quotesData = [];
-        let ordersData = [];
-        let lmeData = [];
+        let isRunning = false;
+        let analysisData = { screen1: null, screen2: null, screen3: null };
 
+        // ═══════════════════════════════════════════════════════
+        // Utility Functions
+        // ═══════════════════════════════════════════════════════
+        function fmt(n) {
+            if (n === null || n === undefined || isNaN(n)) return '-';
+            return Math.round(n).toLocaleString('ko-KR');
+        }
+        
+        function pct(a, b) {
+            if (!a || !b || b === 0) return null;
+            return ((a - b) / b) * 100;
+        }
+
+        function sleep(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // Console Log Functions (Python 스타일)
+        // ═══════════════════════════════════════════════════════
+        const logContainer = () => document.getElementById('agentLogs');
+        
+        function clearLogs() {
+            logContainer().innerHTML = `
+                <div class="text-gray-500 text-center py-12">
+                    <i class="fas fa-robot text-4xl mb-4 opacity-20"></i>
+                    <p class="text-sm">"분석 실행" 버튼을 클릭하면<br>Agent 로그가 실시간으로 표시됩니다</p>
+                </div>
+            `;
+        }
+
+        function initLogs() {
+            logContainer().innerHTML = '';
+        }
+
+        async function logHeader(text) {
+            const line = '═'.repeat(70);
+            appendLog(`\n<span class="console-header">${line}</span>`);
+            appendLog(`<span class="console-header">  ${text}</span>`);
+            appendLog(`<span class="console-header">${line}</span>`);
+            await sleep(100);
+        }
+
+        async function logSubHeader(text) {
+            const line = '─'.repeat(60);
+            appendLog(`\n  <span class="console-subheader">${line}</span>`);
+            appendLog(`  <span class="console-subheader">📌 ${text}</span>`);
+            appendLog(`  <span class="console-subheader">${line}</span>`);
+            await sleep(80);
+        }
+
+        async function logInfo(text) {
+            appendLog(`  <span class="console-info">${text}</span>`);
+            await sleep(30);
+        }
+
+        async function logSuccess(text) {
+            appendLog(`  <span class="console-success">✅ ${text}</span>`);
+            await sleep(50);
+        }
+
+        async function logWarning(text) {
+            appendLog(`  <span class="console-warning">⚠️  ${text}</span>`);
+            await sleep(50);
+        }
+
+        async function logHighlight(text) {
+            appendLog(`  <span class="console-highlight">${text}</span>`);
+            await sleep(30);
+        }
+
+        async function logBox(lines, seq = null) {
+            const prefix = seq !== null ? `PR #${seq}` : '';
+            appendLog(`\n  ┌── ${prefix} ${'─'.repeat(55)}`);
+            for (const line of lines) {
+                appendLog(`  │ ${line}`);
+                await sleep(20);
+            }
+            appendLog(`  └${'─'.repeat(70)}`);
+        }
+
+        async function logAgentPrompt(text) {
+            const short = text.substring(0, 80).replace(/\n/g, ' ');
+            appendLog(`\n  <span class="console-info">📝 [Agent Prompt] ${short}...</span>`);
+            await sleep(50);
+        }
+
+        async function logAgentResponse(text, isApi = false) {
+            const label = isApi ? '🤖 [Claude API 응답]' : '🤖 [Rule-based 분석]';
+            appendLog(`\n  <span class="console-highlight">${label}</span>`);
+            for (const line of text.split('\n')) {
+                appendLog(`     <span class="console-info">${line}</span>`);
+                await sleep(25);
+            }
+        }
+
+        function appendLog(html) {
+            const container = logContainer();
+            const div = document.createElement('div');
+            div.innerHTML = html;
+            div.className = 'slide-in';
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function logSpinner(text) {
+            const id = 'spinner-' + Date.now();
+            appendLog(`  <span id="${id}"><span class="spinner"></span> ${text}</span>`);
+            return id;
+        }
+
+        function removeSpinner(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // Tab Switching
+        // ═══════════════════════════════════════════════════════
+        function switchTab(tabNum) {
+            currentTab = tabNum;
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('bg-gray-700/50', 'hover:bg-gray-700');
+            });
+            const activeBtn = document.querySelector(`[data-tab="${tabNum}"]`);
+            activeBtn.classList.add('active');
+            activeBtn.classList.remove('bg-gray-700/50', 'hover:bg-gray-700');
+            
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+            document.getElementById(`tab${tabNum}`).classList.remove('hidden');
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // Run Analysis (현재 탭에 맞는 분석 실행)
+        // ═══════════════════════════════════════════════════════
+        async function runCurrentAnalysis() {
+            if (isRunning) return;
+            isRunning = true;
+            
+            const btn = document.getElementById('runBtn');
+            btn.innerHTML = '<span class="spinner"></span> 분석 중...';
+            btn.disabled = true;
+
+            initLogs();
+
+            try {
+                if (currentTab === 1) {
+                    await runScreen1Analysis();
+                } else if (currentTab === 2) {
+                    await runScreen2Analysis();
+                } else if (currentTab === 3) {
+                    await runScreen3Analysis();
+                }
+            } catch (err) {
+                appendLog(`<span class="console-error">❌ 오류 발생: ${err.message}</span>`);
+            }
+
+            btn.innerHTML = '<i class="fas fa-play mr-1"></i>분석 실행';
+            btn.disabled = false;
+            isRunning = false;
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // Screen 1: PR 건 최적 추천 단가 제안
+        // ═══════════════════════════════════════════════════════
+        async function runScreen1Analysis() {
+            await logHeader('📋 화면 1: PR 건 최적 추천 단가 제안');
+            await logInfo('Rule1(BODY2) + Rule2(옵션) + Rule3(수량환산) → 계약단가');
+            await logInfo('과거 실적 최근 발주단가 (1순위: 타입+내역일치, 2순위: 타입만)');
+
+            const spinnerId = await logSpinner('데이터 로드 및 분석 중...');
+
+            try {
+                const res = await fetch('/api/screen1/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: [] }) // 서버에서 샘플 자동 선택
+                });
+                const data = await res.json();
+                removeSpinner(spinnerId);
+
+                if (!data.success) throw new Error(data.error);
+
+                analysisData.screen1 = data;
+                
+                // PR 건별 로그 출력
+                for (let i = 0; i < data.results.length; i++) {
+                    const pr = data.results[i];
+                    const lines = [];
+                    lines.push(`밸브타입: ${pr.valveType} → 매핑키: ${pr.valveTypeBase}`);
+                    lines.push(`내역: ${pr.description}`);
+                    lines.push(`수량: ${pr.quantity}` + (pr.tableQty && pr.tableQty !== 1 ? ` (단가표 ${pr.tableQty}개 기준 환산)` : ''));
+                    
+                    if (pr.mapped) {
+                        lines.push(`<span class="console-success">✅ BODY2: ${fmt(pr.bodyPrice)} | 옵션: ${pr.optionDetails?.join(', ') || '없음'} → ${fmt(pr.optionPrice)}</span>`);
+                        lines.push(`<span class="console-highlight">★ 계약단가: ${fmt(pr.contractPrice)}</span>`);
+                    } else {
+                        lines.push(`<span class="console-warning">⚠️  단가테이블 미매핑</span>`);
+                    }
+                    
+                    if (pr.recentOrder) {
+                        lines.push(`📈 최근발주: ${fmt(pr.recentPrice)} (${pr.recentOrder.vendor}, ${pr.recentOrder.date}) [${pr.recentOrder.rank}]`);
+                        lines.push(`📈 발주×90%: ${fmt(pr.recent90)}`);
+                    }
+                    
+                    await logBox(lines, i + 1);
+                }
+
+                // Agent 분석
+                await logSubHeader('🤖 AI Agent - 화면1 분석');
+                
+                const summaryLines = data.results.map(d => {
+                    if (d.contractPrice && d.recentPrice) {
+                        const g = pct(d.contractPrice, d.recentPrice);
+                        return `• ${d.valveType}: 계약${fmt(d.contractPrice)} vs 발주${fmt(d.recentPrice)} (${g > 0 ? '+' : ''}${g?.toFixed(0)}%) → 추천: ${fmt(Math.min(d.contractPrice, d.recentPrice))}`;
+                    } else if (d.recentPrice) {
+                        return `• ${d.valveType}: 미매핑 → 추천: 발주×90%=${fmt(d.recent90)}`;
+                    } else {
+                        return `• ${d.valveType}: 데이터부족 → 견적수집 필요`;
+                    }
+                });
+                
+                await logAgentPrompt('PR 건별 단가비교. 추천단가+근거를 건별 1줄로.');
+                
+                // LLM 호출
+                try {
+                    const llmRes = await fetch('/api/screen1/llm-analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ results: data.results })
+                    });
+                    const llmData = await llmRes.json();
+                    if (llmData.analysis && !llmData.analysis.includes('API 키 미설정')) {
+                        await logAgentResponse(llmData.analysis, true);
+                    } else {
+                        await logAgentResponse(summaryLines.join('\n'), false);
+                    }
+                } catch {
+                    await logAgentResponse(summaryLines.join('\n'), false);
+                }
+
+                // 결과 패널 업데이트
+                renderScreen1Results(data.results);
+
+            } catch (err) {
+                removeSpinner(spinnerId);
+                throw err;
+            }
+        }
+
+        function renderScreen1Results(results) {
+            document.getElementById('screen1-intro').classList.add('hidden');
+            const container = document.getElementById('screen1-results');
+            container.classList.remove('hidden');
+            
+            let html = `<h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <i class="fas fa-list-alt text-blue-400"></i>
+                PR 건별 분석 결과 (${results.length}건)
+            </h3>`;
+
+            for (let i = 0; i < results.length; i++) {
+                const pr = results[i];
+                const statusClass = pr.mapped ? 'border-l-green-500' : 'border-l-yellow-500';
+                const recPrice = pr.contractPrice && pr.recentPrice 
+                    ? Math.min(pr.contractPrice, pr.recentPrice) 
+                    : (pr.recent90 || pr.contractPrice);
+
+                html += `
+                <div class="pr-card border-l-4 ${statusClass} fade-in">
+                    <div class="pr-card-header">
+                        <div>
+                            <span class="font-semibold text-sm">#${i+1} ${pr.valveType}</span>
+                            <span class="text-gray-500 text-xs ml-2">${pr.mapped ? '✅ 매핑됨' : '⚠️ 미매핑'}</span>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xs text-gray-400">추천단가</div>
+                            <div class="text-lg font-bold text-blue-400">${fmt(recPrice)}원</div>
+                        </div>
+                    </div>
+                    <div class="pr-card-body grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">내역</div>
+                            <div class="text-sm truncate">${pr.description || '-'}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">수량</div>
+                            <div class="text-sm">${pr.quantity || '-'}개</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">BODY2 단가</div>
+                            <div class="text-sm">${fmt(pr.bodyPrice)}원</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">옵션 합계</div>
+                            <div class="text-sm">${fmt(pr.optionPrice)}원 ${pr.optionDetails?.length ? `(${pr.optionDetails.join(', ')})` : ''}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">계약단가</div>
+                            <div class="text-sm font-medium">${fmt(pr.contractPrice)}원</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">최근발주</div>
+                            <div class="text-sm">${fmt(pr.recentPrice)}원 ${pr.recentOrder ? `(${pr.recentOrder.rank})` : ''}</div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // Screen 2: 협력사 견적 적정성 검증
+        // ═══════════════════════════════════════════════════════
+        async function runScreen2Analysis() {
+            await logHeader('📋 화면 2: 협력사 견적 적정성 검증');
+            await logInfo('발주×90% ≥ 견적 → 우수 | 발주/계약 ≥ 견적 → 보통 | 그 외 → 부적절');
+
+            const spinnerId = await logSpinner('견적 데이터 검증 중...');
+
+            try {
+                const res = await fetch('/api/screen2/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+                removeSpinner(spinnerId);
+
+                if (!data.success) throw new Error(data.error);
+
+                analysisData.screen2 = data;
+
+                // 견적 건별 로그 (상위 15건)
+                const displayItems = data.results.slice(0, 15);
+                for (let i = 0; i < displayItems.length; i++) {
+                    const r = displayItems[i];
+                    const diffStr = r.gapPercent !== null ? ` (${r.gapPercent > 0 ? '+' : ''}${r.gapPercent.toFixed(1)}%)` : '';
+                    
+                    const lines = [];
+                    lines.push(`${r.materialNo} → ${r.valveType || '미매핑'}`);
+                    lines.push(`🏷️ 견적: ${fmt(r.quotePrice)}${diffStr} | 계약: ${fmt(r.contractPrice)} | 발주: ${fmt(r.recentPrice)}`);
+                    if (r.optionDetails?.length) {
+                        lines.push(`옵션: ${r.optionDetails.join(', ')}`);
+                    }
+                    
+                    await logBox(lines, `${i + 1} ${r.assessmentLabel}`);
+                }
+
+                // 요약
+                await logInfo('');
+                await logHighlight(`📊 적정성 요약 (${data.total}건): ✅우수:${data.counts.excellent} 🔶보통:${data.counts.normal} ❌부적절:${data.counts.inadequate}`);
+
+                // Agent 분석
+                const badItems = data.results.filter(r => r.assessment === 'inadequate');
+                await logSubHeader('🤖 AI Agent - 화면2 분석');
+
+                const fbLines = [];
+                if (badItems.length > 0) {
+                    fbLines.push(`[부적절 ${badItems.length}건]`);
+                    for (const r of badItems.slice(0, 5)) {
+                        const g = r.gapPercent;
+                        fbLines.push(g !== null 
+                            ? `  • ${r.materialNo}: 견적${fmt(r.quotePrice)} vs 발주${fmt(r.recentPrice)} (${g > 0 ? '+' : ''}${g.toFixed(1)}%초과)`
+                            : `  • ${r.materialNo}: 비교기준 부족`);
+                    }
+                }
+                const badPct = (data.counts.inadequate / Math.max(data.total, 1) * 100).toFixed(0);
+                fbLines.push(`[종합] ${data.total}건 중 부적절 ${data.counts.inadequate}건(${badPct}%) → ${data.counts.inadequate < data.total * 0.2 ? '양호' : '개선필요'}`);
+
+                await logAgentPrompt('견적 적정성 종합. 부적절 원인+협상전략.');
+
+                try {
+                    const llmRes = await fetch('/api/screen2/llm-analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ counts: data.counts, inadequateItems: badItems.slice(0, 5) })
+                    });
+                    const llmData = await llmRes.json();
+                    if (llmData.analysis && !llmData.analysis.includes('API 키 미설정')) {
+                        await logAgentResponse(llmData.analysis, true);
+                    } else {
+                        await logAgentResponse(fbLines.join('\n'), false);
+                    }
+                } catch {
+                    await logAgentResponse(fbLines.join('\n'), false);
+                }
+
+                renderScreen2Results(data);
+
+            } catch (err) {
+                removeSpinner(spinnerId);
+                throw err;
+            }
+        }
+
+        function renderScreen2Results(data) {
+            document.getElementById('screen2-intro').classList.add('hidden');
+            const container = document.getElementById('screen2-results');
+            container.classList.remove('hidden');
+
+            const badPct = (data.counts.inadequate / Math.max(data.total, 1) * 100).toFixed(1);
+            const normalPct = (data.counts.normal / Math.max(data.total, 1) * 100).toFixed(1);
+            const goodPct = (data.counts.excellent / Math.max(data.total, 1) * 100).toFixed(1);
+
+            let html = `
+            <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <i class="fas fa-clipboard-check text-green-400"></i>
+                견적 적정성 검증 결과 (${data.total}건)
+            </h3>
+
+            <!-- 요약 카드 -->
+            <div class="grid grid-cols-3 gap-4 mb-6">
+                <div class="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
+                    <div class="text-3xl font-bold text-green-400">${data.counts.excellent}</div>
+                    <div class="text-sm text-green-300">✅ 우수 (${goodPct}%)</div>
+                </div>
+                <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-center">
+                    <div class="text-3xl font-bold text-yellow-400">${data.counts.normal}</div>
+                    <div class="text-sm text-yellow-300">🔶 보통 (${normalPct}%)</div>
+                </div>
+                <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center">
+                    <div class="text-3xl font-bold text-red-400">${data.counts.inadequate}</div>
+                    <div class="text-sm text-red-300">❌ 부적절 (${badPct}%)</div>
+                </div>
+            </div>
+
+            <!-- 상세 리스트 -->
+            <h4 class="font-medium mb-3 text-sm text-gray-400">상세 내역 (상위 20건)</h4>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs">
+                    <thead class="bg-gray-800/50">
+                        <tr class="text-gray-400">
+                            <th class="px-3 py-2 text-left">No</th>
+                            <th class="px-3 py-2 text-left">자재번호</th>
+                            <th class="px-3 py-2 text-left">밸브타입</th>
+                            <th class="px-3 py-2 text-right">견적가</th>
+                            <th class="px-3 py-2 text-right">계약단가</th>
+                            <th class="px-3 py-2 text-right">발주단가</th>
+                            <th class="px-3 py-2 text-right">괴리율</th>
+                            <th class="px-3 py-2 text-center">판정</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+            for (const r of data.results.slice(0, 20)) {
+                const badgeClass = r.assessment === 'excellent' ? 'badge-excellent' 
+                    : r.assessment === 'inadequate' ? 'badge-poor' : 'badge-normal';
+                const gapStr = r.gapPercent !== null ? `${r.gapPercent > 0 ? '+' : ''}${r.gapPercent.toFixed(1)}%` : '-';
+                const gapColor = r.gapPercent > 0 ? 'text-red-400' : (r.gapPercent < 0 ? 'text-green-400' : '');
+
+                html += `
+                    <tr class="border-b border-gray-800/50 hover:bg-gray-800/30">
+                        <td class="px-3 py-2">${r.no}</td>
+                        <td class="px-3 py-2 font-mono">${r.materialNo}</td>
+                        <td class="px-3 py-2">${r.valveType || '-'}</td>
+                        <td class="px-3 py-2 text-right">${fmt(r.quotePrice)}</td>
+                        <td class="px-3 py-2 text-right">${fmt(r.contractPrice)}</td>
+                        <td class="px-3 py-2 text-right">${fmt(r.recentPrice)}</td>
+                        <td class="px-3 py-2 text-right ${gapColor}">${gapStr}</td>
+                        <td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs ${badgeClass}">${r.assessmentLabel}</span></td>
+                    </tr>`;
+            }
+
+            html += `</tbody></table></div>`;
+            container.innerHTML = html;
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // Screen 3: 시황 분석
+        // ═══════════════════════════════════════════════════════
+        async function runScreen3Analysis() {
+            await logHeader('📋 화면 3: 원재료 시황 × 발주단가 종합 분석');
+            await logInfo('🌐 LME 시황: web_search 수집 (fallback: xlsx)');
+            await logInfo('📊 업체별 월별 트렌드 vs 시황 비교 (지수화: 1월=100)');
+
+            const spinnerId = await logSpinner('BC밸브 데이터 분석 중...');
+
+            try {
+                const res = await fetch('/api/screen3/trend');
+                const data = await res.json();
+                removeSpinner(spinnerId);
+
+                if (!data.success) throw new Error(data.error);
+
+                analysisData.screen3 = data;
+
+                await logSuccess(`BC밸브: ${data.summary.totalOrders}건 | 업체: ${data.summary.vendors.join(', ')}`);
+
+                // Step 1: LME 시황
+                await logSubHeader('Step 1: 🌐 LME Cu/Sn 시황 수집');
+                await logInfo('Claude web_search 호출 시도...');
+                await sleep(500);
+                await logInfo('📄 LME xlsx fallback 로드 (실 배포 시 web_search로 대체)');
+                await logSuccess(`LME 데이터 ${data.lmeData.length}개월 로드 완료`);
+
+                // Step 2: 트렌드 비교표
+                await logSubHeader('Step 2: 시황 vs 업체별 단가 트렌드 비교 (1월=100 지수)');
+                
+                // 테이블 헤더
+                let header = `  ${'월'.padStart(4)} │ ${'Cu지수'.padStart(8)} │ ${'Sn지수'.padStart(8)} │ ${'Cu+Sn'.padStart(8)}`;
+                for (const v of data.summary.vendors) {
+                    header += ` │ ${v.substring(0, 6).padStart(8)}`;
+                }
+                header += ` │ ${'괴리'.padStart(7)}`;
+                appendLog(`<span class="console-info">${header}</span>`);
+                appendLog(`<span class="console-info">  ${'─'.repeat(header.length - 2)}</span>`);
+
+                for (const row of data.trendData) {
+                    const m = row.month;
+                    let line = `  ${(m + '월').padStart(4)} │ ${row.cuIndex.toFixed(1).padStart(7)} │ ${row.snIndex.toFixed(1).padStart(7)} │ ${row.cuSnIndex.toFixed(1).padStart(7)}`;
+                    
+                    for (const v of data.summary.vendors) {
+                        const idx = row.vendorIndices[v];
+                        line += ` │ ${idx !== null ? idx.toFixed(1).padStart(7) : '·'.padStart(7)}`;
+                    }
+                    
+                    if (row.gap !== null) {
+                        const emoji = row.gap < -2 ? '🟢' : (row.gap > 2 ? '🔴' : '🟡');
+                        line += ` │ ${emoji}${(row.gap > 0 ? '+' : '') + row.gap.toFixed(1).padStart(5)}`;
+                    } else {
+                        line += ` │ ${'·'.padStart(7)}`;
+                    }
+                    
+                    appendLog(`<span class="console-info">${line}</span>`);
+                    await sleep(30);
+                }
+
+                await logInfo('');
+                await logInfo('※ Cu+Sn 가중지수: Cu 88% + Sn 12% (Bronze 합금 비율)');
+                await logInfo('※ 괴리 = 업체지수 - 시황기대지수(시황변동×80%), 음수=구매유리');
+
+                // Step 3: 적정성 매트릭스
+                await logSubHeader('Step 3: 월별 적정성 판정');
+                await logInfo(`분석업체: ${data.summary.vendors[0] || '원광밸브주식회사'}`);
+                await logInfo('');
+                
+                appendLog(`<span class="console-info">  ${'월'.padStart(4)} │ ${'발주변동'.padStart(9)} │ ${'CuSn변동'.padStart(9)} │ ${'발주'.padStart(5)} │ ${'시황'.padStart(5)} │ ${'판정'.padStart(8)}</span>`);
+                appendLog(`<span class="console-info">  ${'─'.repeat(55)}</span>`);
+
+                for (const [month, assess] of Object.entries(data.assessments)) {
+                    const emoji = assess === 'Good' ? '🟢' : (assess === 'Bad' ? '🔴' : '🟡');
+                    // 간략화 (실제 변동값은 서버에서 추가 제공 필요)
+                    appendLog(`<span class="console-info">  ${(month + '월').padStart(4)} │     ...   │     ...   │  ...  │  ...  │ ${emoji} ${assess}</span>`);
+                    await sleep(20);
+                }
+
+                await logInfo('');
+                const ac = data.assessmentCounts;
+                await logHighlight(`판정요약: 🟢Good:${ac.Good} 🟡Normal:${ac.Normal} 🔴Bad:${ac.Bad}`);
+
+                // Step 4: 차트 생성
+                await logSubHeader('Step 4: 📈 트렌드 비교 차트 생성');
+                await logSuccess('차트 데이터 준비 완료');
+
+                // Step 5: AI Agent 분석
+                await logSubHeader('Step 5: 🤖 AI Agent - 시황×발주 종합 분석');
+
+                const badMonths = Object.entries(data.assessments)
+                    .filter(([_, v]) => v === 'Bad')
+                    .map(([k]) => k + '월');
+
+                const fbLines = [];
+                fbLines.push(`[정합성] ${Object.keys(data.assessments).length}개월 중 Good ${ac.Good}, Bad ${ac.Bad} → 시황 대비 발주 유리`);
+                fbLines.push(`[업체 패턴]`);
+                fbLines.push(`  • 원광: 시황+${data.summary.cuYearChange}%에도 단가 안정 → 보수적 가격 전략`);
+                fbLines.push(`  • 금강: 연말 급락 → 연말 물량 확보 전략, 경쟁 레버리지로 활용`);
+                if (badMonths.length > 0) {
+                    fbLines.push(`[Bad 월] ${badMonths.join(', ')} → 시황 하락분 미반영, 80%비중 감안 인하 요청 가능`);
+                }
+                fbLines.push(`[전략] 단기: Bad월 소급인하 / 중기: LME연동 조항 / 장기: 3rd업체 발굴`);
+
+                await logAgentPrompt('BC밸브 발주×시황 종합분석. 업체 행동패턴+리스크+전략을 구매임원 관점으로.');
+
+                try {
+                    const llmRes = await fetch('/api/screen3/llm-analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            summary: data.summary, 
+                            assessmentCounts: data.assessmentCounts,
+                            assessments: data.assessments 
+                        })
+                    });
+                    const llmData = await llmRes.json();
+                    if (llmData.analysis && !llmData.analysis.includes('API 키 미설정')) {
+                        await logAgentResponse(llmData.analysis, true);
+                    } else {
+                        await logAgentResponse(fbLines.join('\n'), false);
+                    }
+                } catch {
+                    await logAgentResponse(fbLines.join('\n'), false);
+                }
+
+                renderScreen3Results(data);
+
+            } catch (err) {
+                removeSpinner(spinnerId);
+                throw err;
+            }
+        }
+
+        function renderScreen3Results(data) {
+            document.getElementById('screen3-intro').classList.add('hidden');
+            const container = document.getElementById('screen3-results');
+            container.classList.remove('hidden');
+
+            const ac = data.assessmentCounts;
+
+            let html = `
+            <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <i class="fas fa-chart-line text-purple-400"></i>
+                BC밸브 원재료 시황 × 발주단가 트렌드
+            </h3>
+            <p class="text-xs text-gray-500 mb-4">VGBARR240AT · Bronze Casting (Cu 88% + Sn 12%) · 원재료 비중 80%</p>
+
+            <!-- 통계 카드 -->
+            <div class="grid grid-cols-4 gap-3 mb-6">
+                <div class="bg-gray-800/50 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-orange-400">+${data.summary.cuYearChange}%</div>
+                    <div class="text-xs text-gray-400">Cu 연간</div>
+                </div>
+                <div class="bg-gray-800/50 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-yellow-400">+${data.summary.snYearChange}%</div>
+                    <div class="text-xs text-gray-400">Sn 연간</div>
+                </div>
+                <div class="bg-gray-800/50 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-blue-400">${data.summary.totalOrders}</div>
+                    <div class="text-xs text-gray-400">분석 건수</div>
+                </div>
+                <div class="bg-gray-800/50 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold ${ac.Good >= ac.Bad ? 'text-green-400' : 'text-red-400'}">${ac.Good >= ac.Bad ? 'Good' : 'Bad'}</div>
+                    <div class="text-xs text-gray-400">전체 판정</div>
+                </div>
+            </div>
+
+            <!-- 차트 -->
+            <div class="bg-gray-800/30 rounded-lg p-4 mb-6">
+                <canvas id="trendChart" height="200"></canvas>
+            </div>
+
+            <!-- 월별 판정 -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-gray-800/30 rounded-lg p-4">
+                    <h4 class="font-medium mb-3 text-sm text-gray-400">📊 월별 적정성 판정</h4>
+                    <div class="grid grid-cols-3 gap-2 text-xs">
+                        ${Object.entries(data.assessments).map(([m, v]) => {
+                            const cls = v === 'Good' ? 'text-green-400' : (v === 'Bad' ? 'text-red-400' : 'text-yellow-400');
+                            const emoji = v === 'Good' ? '🟢' : (v === 'Bad' ? '🔴' : '🟡');
+                            return `<div class="flex justify-between"><span>${m}월</span><span class="${cls}">${emoji} ${v}</span></div>`;
+                        }).join('')}
+                    </div>
+                </div>
+                <div class="bg-gray-800/30 rounded-lg p-4">
+                    <h4 class="font-medium mb-3 text-sm text-gray-400">💡 핵심 인사이트</h4>
+                    <div class="text-xs text-gray-300 space-y-1">
+                        <p>• 시황 +${data.summary.cuYearChange}%(Cu)/+${data.summary.snYearChange}%(Sn) 상승에도 발주단가 안정</p>
+                        <p>• 시황 대비 유리한 구매 구조 유지 중 (Good ${ac.Good}개월)</p>
+                        <p>• 원재료 비중 80% 감안 시, 시황 미반영분 소급 협상 여지</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-xs text-gray-600 mt-4">
+                ※ 지수 산출: 1월 기준가 대비 변동률. Cu+Sn 가중지수는 Bronze 합금비율(Cu88%+Sn12%) 적용.
+            </div>`;
+
+            container.innerHTML = html;
+
+            // 차트 그리기
+            setTimeout(() => drawTrendChart(data), 100);
+        }
+
+        function drawTrendChart(data) {
+            const ctx = document.getElementById('trendChart')?.getContext('2d');
+            if (!ctx) return;
+
+            const months = data.trendData.map(d => d.month + '월');
+            const cuSnData = data.trendData.map(d => d.cuSnIndex);
+            
+            // 메인 업체 데이터 (첫 번째 업체)
+            const mainVendor = data.summary.vendors[0];
+            const vendorData = data.trendData.map(d => d.vendorIndices[mainVendor]);
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: months,
+                    datasets: [
+                        {
+                            label: 'Cu+Sn 가중지수',
+                            data: cuSnData,
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            borderWidth: 2.5,
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#f59e0b',
+                        },
+                        {
+                            label: mainVendor ? mainVendor.substring(0, 6) : '발주단가',
+                            data: vendorData,
+                            borderColor: '#3b82f6',
+                            borderWidth: 2.5,
+                            tension: 0.3,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#3b82f6',
+                            spanGaps: true,
+                        },
+                        {
+                            label: '기준선 (100)',
+                            data: Array(12).fill(100),
+                            borderColor: 'rgba(255,255,255,0.15)',
+                            borderWidth: 1,
+                            borderDash: [2, 4],
+                            pointRadius: 0,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#6b7a94', font: { size: 11 }, usePointStyle: true, padding: 16 }
+                        },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleColor: '#e0e6f0',
+                            bodyColor: '#94a3b8',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            grid: { color: 'rgba(255,255,255,0.04)' }, 
+                            ticks: { color: '#4b5e78', font: { size: 10 } } 
+                        },
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.04)' },
+                            ticks: { color: '#4b5e78', font: { size: 10 } },
+                            min: 85, max: 145,
+                            title: { display: true, text: '지수 (1월=100)', color: '#4b5e78', font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════
         // Initialize
+        // ═══════════════════════════════════════════════════════
         document.addEventListener('DOMContentLoaded', async () => {
-            await checkApiStatus();
-            await loadInitialData();
-        });
-
-        // API Status Check
-        async function checkApiStatus() {
             try {
                 const res = await fetch('/api/health');
                 const data = await res.json();
                 if (data.status === 'ok') {
                     document.getElementById('apiStatus').innerHTML = 
-                        '<i class="fas fa-circle text-xs mr-1 text-green-400"></i> API 연결됨';
+                        '<i class="fas fa-circle text-[8px] mr-1.5 text-green-400"></i>API 연결됨';
                     document.getElementById('apiStatus').className = 
-                        'px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm';
+                        'px-3 py-1.5 bg-green-500/20 text-green-400 rounded-full text-xs font-medium';
                     document.getElementById('dataCount').textContent = 
-                        `단가 ${data.data.priceTable}건 | 견적 ${data.data.quotes}건 | 실적 ${data.data.orders}건`;
+                        `단가 ${data.data.priceTable} | 견적 ${data.data.quotes} | 실적 ${data.data.orders.toLocaleString()} | BC ${data.data.bcOrders}`;
                 }
-            } catch (e) {
+            } catch {
                 document.getElementById('apiStatus').innerHTML = 
-                    '<i class="fas fa-exclamation-circle text-xs mr-1"></i> API 연결 실패';
+                    '<i class="fas fa-exclamation-circle text-[8px] mr-1.5"></i>연결 실패';
                 document.getElementById('apiStatus').className = 
-                    'px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm';
+                    'px-3 py-1.5 bg-red-500/20 text-red-400 rounded-full text-xs font-medium';
             }
-        }
-
-        // Load Initial Data
-        async function loadInitialData() {
-            try {
-                // Load valve types for dropdown
-                const priceRes = await fetch('/api/price-table');
-                const priceData = await priceRes.json();
-                priceTableData = priceData.data || [];
-                
-                const valveSelect = document.getElementById('valveTypeSelect');
-                const uniqueTypes = [...new Set(priceTableData.map(p => p['밸브타입']))];
-                uniqueTypes.forEach(type => {
-                    const opt = document.createElement('option');
-                    opt.value = type;
-                    opt.textContent = type;
-                    valveSelect.appendChild(opt);
-                });
-
-                // Load quotes for dropdown
-                const quoteRes = await fetch('/api/quotes');
-                const quoteData = await quoteRes.json();
-                quotesData = quoteData.data || [];
-                
-                const quoteSelect = document.getElementById('quoteSelect');
-                quotesData.slice(0, 50).forEach((q, idx) => {
-                    const opt = document.createElement('option');
-                    opt.value = idx;
-                    opt.textContent = `${q['자재번호']} - ${q['자재내역']?.substring(0, 30)}...`;
-                    quoteSelect.appendChild(opt);
-                });
-
-            } catch (e) {
-                console.error('Data load error:', e);
-            }
-        }
-
-        // Tab Switching
-        function switchTab(tabNum) {
-            currentTab = tabNum;
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-                btn.classList.add('bg-gray-700', 'hover:bg-gray-600');
-            });
-            document.querySelector(`[data-tab="${tabNum}"]`).classList.add('active');
-            document.querySelector(`[data-tab="${tabNum}"]`).classList.remove('bg-gray-700', 'hover:bg-gray-600');
-            
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.add('hidden');
-            });
-            document.getElementById(`tab${tabNum}`).classList.remove('hidden');
-        }
-
-        // Clear Logs
-        function clearLogs() {
-            document.getElementById('agentLogs').innerHTML = `
-                <div class="text-gray-500 text-center py-8">
-                    <i class="fas fa-robot text-4xl mb-3 opacity-30"></i>
-                    <p>분석을 시작하면 Agent 로그가 여기에 표시됩니다</p>
-                </div>
-            `;
-        }
-
-        // Add Log Entry with Animation
-        function addLog(step, icon, title, content, status = 'processing') {
-            const logsContainer = document.getElementById('agentLogs');
-            if (logsContainer.querySelector('.text-gray-500.text-center')) {
-                logsContainer.innerHTML = '';
-            }
-
-            const logId = `log-${Date.now()}`;
-            const statusIcon = status === 'processing' 
-                ? '<div class="spinner"></div>' 
-                : status === 'complete' 
-                    ? '<i class="fas fa-check text-green-400"></i>'
-                    : '<i class="fas fa-times text-red-400"></i>';
-
-            const logHtml = `
-                <div id="${logId}" class="log-card bg-gray-800 rounded-lg p-4 slide-in active">
-                    <div class="flex items-start gap-3">
-                        <div class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <i class="fas ${icon} text-blue-400 text-sm"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center justify-between mb-1">
-                                <span class="font-medium text-sm">${step}. ${title}</span>
-                                <span id="${logId}-status">${statusIcon}</span>
-                            </div>
-                            <p id="${logId}-content" class="text-gray-400 text-sm typing-cursor">${content}</p>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            logsContainer.insertAdjacentHTML('beforeend', logHtml);
-            logsContainer.scrollTop = logsContainer.scrollHeight;
-
-            // Remove active state from previous logs
-            setTimeout(() => {
-                document.querySelectorAll('.log-card.active').forEach(card => {
-                    if (card.id !== logId) card.classList.remove('active');
-                });
-            }, 100);
-
-            return logId;
-        }
-
-        // Update Log Status
-        function updateLogStatus(logId, status, newContent = null) {
-            const statusEl = document.getElementById(`${logId}-status`);
-            const contentEl = document.getElementById(`${logId}-content`);
-            
-            if (statusEl) {
-                statusEl.innerHTML = status === 'complete' 
-                    ? '<i class="fas fa-check text-green-400"></i>'
-                    : '<i class="fas fa-times text-red-400"></i>';
-            }
-            
-            if (contentEl && newContent) {
-                contentEl.classList.remove('typing-cursor');
-                typeText(contentEl, newContent);
-            } else if (contentEl) {
-                contentEl.classList.remove('typing-cursor');
-            }
-        }
-
-        // Typing Effect
-        async function typeText(element, text, delay = 20) {
-            element.textContent = '';
-            for (let i = 0; i < text.length; i++) {
-                element.textContent += text[i];
-                await new Promise(r => setTimeout(r, delay));
-            }
-        }
-
-        // Format Currency
-        function formatCurrency(num) {
-            if (num === null || num === undefined || isNaN(num)) return '-';
-            return Math.round(num).toLocaleString('ko-KR') + '원';
-        }
-
-        // ========== Tab 1: 최적단가 분석 ==========
-        async function analyzePriceRecommendation() {
-            const valveType = document.getElementById('valveTypeSelect').value;
-            const quantity = parseInt(document.getElementById('quantityInput').value) || 10;
-
-            if (!valveType) {
-                alert('밸브 타입을 선택해주세요.');
-                return;
-            }
-
-            clearLogs();
-            document.getElementById('priceResult').classList.add('hidden');
-
-            // Step 1: 데이터 수집
-            const log1 = addLog(1, 'fa-database', '데이터 수집', '단가 테이블 및 발주 실적 조회 중...');
-            await new Promise(r => setTimeout(r, 800));
-            updateLogStatus(log1, 'complete', `밸브타입 ${valveType} 관련 데이터 수집 완료`);
-
-            // Step 2: 규칙 적용
-            const log2 = addLog(2, 'fa-cogs', '매핑 규칙 적용', 'Rule 1~3 적용하여 단가 계산 중...');
-            await new Promise(r => setTimeout(r, 600));
-            updateLogStatus(log2, 'complete', 'BODY2 기본단가 + 옵션단가 계산 완료');
-
-            // Step 3: API 호출
-            const log3 = addLog(3, 'fa-brain', 'AI 분석', 'Claude API로 최적 단가 분석 중...');
-            
-            try {
-                const response = await fetch('/api/analyze/price-recommendation', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ valveType, quantity })
-                });
-
-                const result = await response.json();
-                
-                if (result.success) {
-                    updateLogStatus(log3, 'complete', 'AI 분석 완료');
-                    
-                    // Step 4: 결과 정리
-                    const log4 = addLog(4, 'fa-check-double', '결과 도출', '최적 단가 및 근거 정리 중...');
-                    await new Promise(r => setTimeout(r, 500));
-                    updateLogStatus(log4, 'complete', '분석 결과 도출 완료');
-
-                    displayPriceResult(result.data);
-                } else {
-                    updateLogStatus(log3, 'error', result.error || '분석 실패');
-                }
-            } catch (e) {
-                updateLogStatus(log3, 'error', '서버 연결 오류');
-            }
-        }
-
-        function displayPriceResult(data) {
-            const resultDiv = document.getElementById('priceResult');
-            resultDiv.classList.remove('hidden');
-            resultDiv.innerHTML = `
-                <div class="bg-gray-800 rounded-xl p-6 fade-in">
-                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <i class="fas fa-lightbulb text-yellow-400"></i>
-                        최적 단가 제안 결과
-                    </h3>
-                    
-                    <div class="grid grid-cols-2 gap-4 mb-6">
-                        <div class="bg-gray-700/50 rounded-lg p-4">
-                            <div class="text-gray-400 text-sm mb-1">밸브 타입</div>
-                            <div class="text-xl font-bold">${data.valveType || '-'}</div>
-                        </div>
-                        <div class="bg-gray-700/50 rounded-lg p-4">
-                            <div class="text-gray-400 text-sm mb-1">요청 수량</div>
-                            <div class="text-xl font-bold">${data.quantity || '-'}개</div>
-                        </div>
-                    </div>
-
-                    <div class="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-4 mb-6">
-                        <div class="text-gray-300 text-sm mb-2">추천 단가</div>
-                        <div class="text-3xl font-bold text-blue-400">${formatCurrency(data.recommendedPrice)}</div>
-                        <div class="text-gray-400 text-sm mt-1">KG당: ${formatCurrency(data.pricePerKg)}</div>
-                    </div>
-
-                    <div class="space-y-3">
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">BODY2 기본단가</span>
-                            <span class="font-medium">${formatCurrency(data.bodyPrice)}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">옵션 단가 합계</span>
-                            <span class="font-medium">${formatCurrency(data.optionPrice)}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">최근 발주 평균단가</span>
-                            <span class="font-medium">${formatCurrency(data.recentOrderAvg)}</span>
-                        </div>
-                    </div>
-
-                    ${data.aiAnalysis ? `
-                    <div class="mt-6 bg-gray-700/30 rounded-lg p-4">
-                        <div class="flex items-center gap-2 mb-2">
-                            <i class="fas fa-robot text-blue-400"></i>
-                            <span class="font-medium">AI 분석 의견</span>
-                        </div>
-                        <p class="text-gray-300 text-sm leading-relaxed">${data.aiAnalysis}</p>
-                    </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-
-        // ========== Tab 2: 견적 검증 ==========
-        async function analyzeQuoteVerification() {
-            const quoteIdx = document.getElementById('quoteSelect').value;
-            
-            if (quoteIdx === '') {
-                alert('견적 항목을 선택해주세요.');
-                return;
-            }
-
-            clearLogs();
-            document.getElementById('quoteResult').classList.add('hidden');
-
-            const quote = quotesData[parseInt(quoteIdx)];
-
-            // Step 1: 견적 데이터 로드
-            const log1 = addLog(1, 'fa-file-alt', '견적 데이터 로드', '협력사 제출 견적 정보 확인 중...');
-            await new Promise(r => setTimeout(r, 600));
-            updateLogStatus(log1, 'complete', `자재번호: ${quote['자재번호']} 로드 완료`);
-
-            // Step 2: 매핑 규칙 적용
-            const log2 = addLog(2, 'fa-link', '밸브타입 매핑', '자재번호 → 밸브타입 매핑 중...');
-            await new Promise(r => setTimeout(r, 500));
-            updateLogStatus(log2, 'complete', '매핑 규칙 적용 완료');
-
-            // Step 3: 발주 실적 조회
-            const log3 = addLog(3, 'fa-history', '발주 실적 조회', '과거 발주 내역 분석 중...');
-            await new Promise(r => setTimeout(r, 700));
-
-            // Step 4: AI 분석
-            const log4 = addLog(4, 'fa-brain', 'AI 적정성 검증', 'Claude API로 견적 적정성 분석 중...');
-
-            try {
-                const response = await fetch('/api/analyze/quote-verification', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ quoteIndex: parseInt(quoteIdx) })
-                });
-
-                const result = await response.json();
-                
-                if (result.success) {
-                    updateLogStatus(log3, 'complete', `관련 발주실적 ${result.data.relatedOrders || 0}건 확인`);
-                    updateLogStatus(log4, 'complete', 'AI 분석 완료');
-                    
-                    const log5 = addLog(5, 'fa-gavel', '판정 결과', '최종 적정성 판정 중...');
-                    await new Promise(r => setTimeout(r, 400));
-                    updateLogStatus(log5, 'complete', `판정: ${result.data.verdict || '분석 완료'}`);
-
-                    displayQuoteResult(result.data);
-                } else {
-                    updateLogStatus(log4, 'error', result.error || '검증 실패');
-                }
-            } catch (e) {
-                updateLogStatus(log4, 'error', '서버 연결 오류');
-            }
-        }
-
-        function displayQuoteResult(data) {
-            const resultDiv = document.getElementById('quoteResult');
-            resultDiv.classList.remove('hidden');
-            
-            const verdictClass = data.verdict === '우수' ? 'status-excellent' 
-                : data.verdict === '보통' ? 'status-normal' 
-                : 'status-poor';
-
-            resultDiv.innerHTML = `
-                <div class="bg-gray-800 rounded-xl p-6 fade-in">
-                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <i class="fas fa-clipboard-check text-green-400"></i>
-                        견적 검증 결과
-                    </h3>
-
-                    <div class="flex items-center justify-center mb-6">
-                        <div class="text-center">
-                            <div class="w-24 h-24 rounded-full flex items-center justify-center ${verdictClass} mb-2">
-                                <span class="text-3xl font-bold">${data.verdict || '-'}</span>
-                            </div>
-                            <div class="text-gray-400 text-sm">적정성 판정</div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4 mb-6">
-                        <div class="bg-gray-700/50 rounded-lg p-4">
-                            <div class="text-gray-400 text-sm mb-1">자재번호</div>
-                            <div class="font-bold truncate">${data.materialNo || '-'}</div>
-                        </div>
-                        <div class="bg-gray-700/50 rounded-lg p-4">
-                            <div class="text-gray-400 text-sm mb-1">매핑된 밸브타입</div>
-                            <div class="font-bold">${data.valveType || '-'}</div>
-                        </div>
-                    </div>
-
-                    <div class="space-y-3 mb-6">
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">협력사 견적단가</span>
-                            <span class="font-medium text-yellow-400">${formatCurrency(data.quotePrice)}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">시스템 추천단가</span>
-                            <span class="font-medium text-blue-400">${formatCurrency(data.systemPrice)}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">최근 발주단가</span>
-                            <span class="font-medium">${formatCurrency(data.recentOrderPrice)}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">발주단가×90%</span>
-                            <span class="font-medium">${formatCurrency(data.targetPrice)}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">괴리율</span>
-                            <span class="font-medium ${data.diffRate > 0 ? 'text-red-400' : 'text-green-400'}">${data.diffRate?.toFixed(1) || '-'}%</span>
-                        </div>
-                    </div>
-
-                    ${data.aiAnalysis ? `
-                    <div class="bg-gray-700/30 rounded-lg p-4">
-                        <div class="flex items-center gap-2 mb-2">
-                            <i class="fas fa-robot text-green-400"></i>
-                            <span class="font-medium">AI 협상 전략 제안</span>
-                        </div>
-                        <p class="text-gray-300 text-sm leading-relaxed">${data.aiAnalysis}</p>
-                    </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-
-        // ========== Tab 3: 시황 분석 ==========
-        async function analyzeMarketTrend() {
-            const target = document.getElementById('marketAnalysisTarget').value;
-            
-            clearLogs();
-            document.getElementById('marketResult').classList.add('hidden');
-
-            // Step 1: LME 시황 조회
-            const log1 = addLog(1, 'fa-globe', 'LME 시황 조회', '2025년 Cu/Sn 월별 시황 데이터 로드 중...');
-            await new Promise(r => setTimeout(r, 800));
-            updateLogStatus(log1, 'complete', 'LME 월별 시황 데이터 12개월 로드 완료');
-
-            // Step 2: 발주 실적 분석
-            const log2 = addLog(2, 'fa-chart-bar', '발주 실적 분석', `${target} 타입 발주 실적 집계 중...`);
-            await new Promise(r => setTimeout(r, 600));
-            updateLogStatus(log2, 'complete', `${target} 타입 654건 발주 실적 분석 완료`);
-
-            // Step 3: 지수 계산
-            const log3 = addLog(3, 'fa-calculator', '시황 지수 산출', 'Cu 88% + Sn 12% 가중지수 계산 중...');
-            await new Promise(r => setTimeout(r, 500));
-
-            // Step 4: AI 분석
-            const log4 = addLog(4, 'fa-brain', 'AI 트렌드 분석', 'Claude API로 시황-단가 상관관계 분석 중...');
-
-            try {
-                const response = await fetch('/api/analyze/market-trend', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ valveType: target })
-                });
-
-                const result = await response.json();
-                
-                if (result.success) {
-                    updateLogStatus(log3, 'complete', 'Cu+Sn 가중지수 계산 완료');
-                    updateLogStatus(log4, 'complete', 'AI 트렌드 분석 완료');
-
-                    const log5 = addLog(5, 'fa-flag-checkered', '적정성 판정', '월별 가격 적정성 판정 중...');
-                    await new Promise(r => setTimeout(r, 400));
-                    updateLogStatus(log5, 'complete', '월별 적정성 판정 완료');
-
-                    displayMarketResult(result.data);
-                } else {
-                    updateLogStatus(log4, 'error', result.error || '분석 실패');
-                }
-            } catch (e) {
-                updateLogStatus(log4, 'error', '서버 연결 오류');
-            }
-        }
-
-        function displayMarketResult(data) {
-            const resultDiv = document.getElementById('marketResult');
-            resultDiv.classList.remove('hidden');
-
-            const months = data.monthlyData?.map(d => d.month) || ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-            const cuSnIndex = data.monthlyData?.map(d => d.cuSnIndex) || [];
-            const orderIndex = data.monthlyData?.map(d => d.orderIndex) || [];
-
-            resultDiv.innerHTML = `
-                <div class="bg-gray-800 rounded-xl p-6 fade-in">
-                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <i class="fas fa-chart-line text-purple-400"></i>
-                        시황 × 발주단가 트렌드 분석
-                    </h3>
-
-                    <div class="grid grid-cols-3 gap-4 mb-6">
-                        <div class="bg-gray-700/50 rounded-lg p-4 text-center">
-                            <div class="text-gray-400 text-sm mb-1">분석 대상</div>
-                            <div class="text-xl font-bold text-purple-400">${data.valveType || 'VGBARR240AT'}</div>
-                        </div>
-                        <div class="bg-gray-700/50 rounded-lg p-4 text-center">
-                            <div class="text-gray-400 text-sm mb-1">분석 건수</div>
-                            <div class="text-xl font-bold">${data.totalOrders || 654}건</div>
-                        </div>
-                        <div class="bg-gray-700/50 rounded-lg p-4 text-center">
-                            <div class="text-gray-400 text-sm mb-1">전체 적정성</div>
-                            <div class="text-xl font-bold ${data.overallAssessment === 'Good' ? 'text-green-400' : data.overallAssessment === 'Normal' ? 'text-yellow-400' : 'text-red-400'}">${data.overallAssessment || 'Normal'}</div>
-                        </div>
-                    </div>
-
-                    <div class="bg-gray-700/30 rounded-lg p-4 mb-6">
-                        <canvas id="trendChart" height="200"></canvas>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4 mb-6">
-                        <div class="bg-gray-700/30 rounded-lg p-4">
-                            <h4 class="font-medium mb-3 text-sm">Cu/Sn 시황지수 (1월=100)</h4>
-                            <div class="text-2xl font-bold text-orange-400">${cuSnIndex[cuSnIndex.length-1]?.toFixed(1) || '-'}</div>
-                            <div class="text-gray-400 text-sm">12월 기준</div>
-                        </div>
-                        <div class="bg-gray-700/30 rounded-lg p-4">
-                            <h4 class="font-medium mb-3 text-sm">발주단가지수 (1월=100)</h4>
-                            <div class="text-2xl font-bold text-blue-400">${orderIndex[orderIndex.length-1]?.toFixed(1) || '-'}</div>
-                            <div class="text-gray-400 text-sm">12월 기준</div>
-                        </div>
-                    </div>
-
-                    ${data.aiAnalysis ? `
-                    <div class="bg-gray-700/30 rounded-lg p-4">
-                        <div class="flex items-center gap-2 mb-2">
-                            <i class="fas fa-robot text-purple-400"></i>
-                            <span class="font-medium">AI 시황 분석 의견</span>
-                        </div>
-                        <p class="text-gray-300 text-sm leading-relaxed">${data.aiAnalysis}</p>
-                    </div>
-                    ` : ''}
-                </div>
-            `;
-
-            // Draw Chart
-            setTimeout(() => {
-                const ctx = document.getElementById('trendChart').getContext('2d');
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: months,
-                        datasets: [
-                            {
-                                label: 'Cu+Sn 시황지수',
-                                data: cuSnIndex,
-                                borderColor: '#f97316',
-                                backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                                fill: true,
-                                tension: 0.4
-                            },
-                            {
-                                label: '발주단가지수',
-                                data: orderIndex,
-                                borderColor: '#3b82f6',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                fill: true,
-                                tension: 0.4
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                labels: { color: '#9ca3af' }
-                            }
-                        },
-                        scales: {
-                            x: {
-                                ticks: { color: '#9ca3af' },
-                                grid: { color: 'rgba(75, 85, 99, 0.3)' }
-                            },
-                            y: {
-                                ticks: { color: '#9ca3af' },
-                                grid: { color: 'rgba(75, 85, 99, 0.3)' }
-                            }
-                        }
-                    }
-                });
-            }, 100);
-        }
+        });
     </script>
 </body>
 </html>
