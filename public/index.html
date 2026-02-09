@@ -1377,76 +1377,43 @@ Bad 판정 ${ac.Bad}개월 (${badMonths.join(', ') || '없음'}) - 시황 하락
             if (!ctx) return;
 
             const months = data.trendData.map(d => d.monthLabel);
-            
-            // 지수 데이터 사용 (1월 = 100 기준)
             const cuSnIndex = data.trendData.map(d => d.cuSnIndex);
             const mainVendorIndex = data.trendData.map(d => d.mainVendorIndex);
-            
-            // 4개월 시차 적용된 원재료 지수 (5월부터 표시)
-            const laggedCuSnIndex = data.trendData.map((d, i) => {
-                const lagIndex = i - 4;
-                if (lagIndex >= 0 && data.trendData[lagIndex]) {
-                    return data.trendData[lagIndex].cuSnIndex;
-                }
-                return null;
-            });
 
+            // 참고 파일 스타일 그대로 적용
             chartInstances.trend = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: months,
                     datasets: [
                         {
-                            label: '원재료 지수 (Cu+Sn)',
+                            label: 'Cu+Sn 가중지수',
                             data: cuSnIndex,
                             borderColor: '#f59e0b',
-                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                            borderWidth: 3,
+                            backgroundColor: 'rgba(245,158,11,0.1)',
+                            borderWidth: 2.5,
                             fill: true,
-                            tension: 0.4,
-                            pointRadius: 6,
-                            pointBackgroundColor: '#f59e0b',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2,
-                            pointHoverRadius: 8,
-                        },
-                        {
-                            label: '4개월 전 원재료 (시차)',
-                            data: laggedCuSnIndex,
-                            borderColor: '#f59e0b',
-                            borderWidth: 2,
-                            borderDash: [5, 5],
-                            fill: false,
-                            tension: 0.4,
+                            tension: 0.3,
                             pointRadius: 4,
                             pointBackgroundColor: '#f59e0b',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 1,
-                            spanGaps: false,
                         },
                         {
-                            label: data.summary.mainVendor ? data.summary.mainVendor.substring(0, 6) + ' 지수' : '업체 지수',
+                            label: data.summary.mainVendor ? data.summary.mainVendor.substring(0, 4) : '업체',
                             data: mainVendorIndex,
                             borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.4,
-                            pointRadius: 6,
+                            borderWidth: 2.5,
+                            tension: 0.3,
+                            pointRadius: 4,
                             pointBackgroundColor: '#3b82f6',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2,
-                            pointHoverRadius: 8,
                             spanGaps: true,
                         },
                         {
                             label: '기준선 (100)',
                             data: Array(12).fill(100),
-                            borderColor: 'rgba(255,255,255,0.3)',
-                            borderWidth: 2,
-                            borderDash: [3, 3],
+                            borderColor: 'rgba(255,255,255,0.15)',
+                            borderWidth: 1,
+                            borderDash: [2, 4],
                             pointRadius: 0,
-                            fill: false,
                         }
                     ]
                 },
@@ -1455,65 +1422,37 @@ Bad 판정 ${ac.Bad}개월 (${badMonths.join(', ') || '없음'}) - 시황 하락
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
-                        legend: { 
+                        legend: {
                             labels: { 
-                                color: '#94a3b8', 
-                                font: { size: 11, weight: '500' },
-                                usePointStyle: true,
-                                padding: 20
+                                color: '#6b7a94', 
+                                font: { size: 11 }, 
+                                usePointStyle: true, 
+                                pointStyle: 'circle', 
+                                padding: 16 
                             }
                         },
                         tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                            titleColor: '#fff',
+                            backgroundColor: '#1e293b',
+                            titleColor: '#e0e6f0',
                             bodyColor: '#94a3b8',
                             borderColor: 'rgba(255,255,255,0.1)',
                             borderWidth: 1,
-                            padding: 14,
-                            cornerRadius: 8,
                             callbacks: {
-                                label: ctx => {
-                                    const val = ctx.raw;
-                                    if (val === null || val === undefined) return null;
-                                    if (ctx.dataset.label === '기준선 (100)') return null;
-                                    const change = val - 100;
-                                    const sign = change >= 0 ? '+' : '';
-                                    return `  ${ctx.dataset.label}: ${val.toFixed(1)} (${sign}${change.toFixed(1)}%)`;
-                                },
-                                afterBody: (items) => {
-                                    const idx = items[0]?.dataIndex;
-                                    if (idx !== undefined && idx >= 4) {
-                                        const lagMonth = idx - 3;
-                                        return [`  📌 비교: ${lagMonth}월 원재료 → ${idx + 1}월 단가`];
-                                    }
-                                    return [];
-                                }
+                                label: ctx => ctx.dataset.label + ': ' + (ctx.raw ? ctx.raw.toFixed(1) : '-')
                             }
                         }
                     },
                     scales: {
                         x: { 
-                            grid: { color: 'rgba(255,255,255,0.05)' }, 
-                            ticks: { color: '#64748b', font: { size: 11 } } 
+                            grid: { color: 'rgba(255,255,255,0.04)' }, 
+                            ticks: { color: '#4b5e78', font: { size: 11 } } 
                         },
                         y: {
-                            type: 'linear',
-                            position: 'left',
-                            grid: { color: 'rgba(255,255,255,0.05)' },
-                            min: 70,
-                            max: 130,
-                            ticks: { 
-                                color: '#94a3b8', 
-                                font: { size: 10 },
-                                stepSize: 10,
-                                callback: val => val
-                            },
-                            title: {
-                                display: true,
-                                text: '지수 (1월 = 100)',
-                                color: '#94a3b8',
-                                font: { size: 11, weight: 'bold' }
-                            }
+                            grid: { color: 'rgba(255,255,255,0.04)' },
+                            ticks: { color: '#4b5e78', font: { size: 11 }, callback: v => v },
+                            min: 75,
+                            max: 145,
+                            title: { display: true, text: '지수 (1월=100)', color: '#4b5e78', font: { size: 11 } }
                         }
                     }
                 }
