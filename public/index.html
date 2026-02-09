@@ -648,11 +648,11 @@
         //  Screen 1: PR 건 최적 추천 단가 제안 (PRD v2.0)
         // ═══════════════════════════════════════════════════════════════
         async function runScreen1Demo() {
-            updateStepCount(0, 6);
+            updateStepCount(0, 5);
             
             // Step 1: 데이터 수집
-            setProgress(10, '단가테이블 조회');
-            updateStepCount(1, 6);
+            setProgress(15, '단가테이블 조회');
+            updateStepCount(1, 5);
             
             await addAgentCard('data', '', { loading: true, title: '택입 단가테이블 조회', delay: 700 });
             document.querySelector('.agent-card.data:last-child .card-content').innerHTML = 
@@ -662,31 +662,30 @@
             document.querySelector('.agent-card.data:last-child .card-content').innerHTML = 
                 '<div class="mono text-xs">→ 36,960건 로드 완료 (2.1s)</div>';
             
-            // Step 2: PR 샘플 선택
-            setProgress(25, 'PR 샘플 추출');
-            updateStepCount(2, 6);
+            // Step 2: PR 데이터 추출
+            setProgress(30, 'PR 데이터 추출');
+            updateStepCount(2, 5);
             
             await addAgentCard('rule', `
                 <div class="space-y-1 text-xs">
-                    <div>• 단가테이블 매핑 가능: <span class="text-green-400 font-semibold">7건</span></div>
-                    <div>• 미매핑 (실적 기준): <span class="text-yellow-400 font-semibold">3건</span></div>
-                    <div>• 합계: <span class="text-white font-semibold">10건</span> 선택</div>
+                    <div>• Valve Type 보유 전체 데이터 대상</div>
+                    <div>• 단가테이블 매핑 / 미매핑 분류</div>
                 </div>
-            `, { title: 'PR 샘플 추출' });
+            `, { title: 'PR 데이터 추출' });
             
-            // Step 3: Rule 적용
-            setProgress(40, '계약단가 산출');
-            updateStepCount(3, 6);
+            // Step 3: 계약단가 산출
+            setProgress(50, '계약단가 산출');
+            updateStepCount(3, 5);
             
             await addAgentCard('rule', `
                 <div class="space-y-2 text-xs">
                     <div class="flex items-center gap-2">
-                        <span class="badge badge-info">기본</span>
+                        <span class="badge badge-info">본가</span>
                         <span>밸브타입 매핑 → BODY2 기본단가</span>
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="badge badge-info">옵션</span>
-                        <span>키워드 추출 → 옵션단가 합산 (I/O-P, LOCK 등)</span>
+                        <span>키워드 추출 → 옵션단가 합산</span>
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="badge badge-info">합계</span>
@@ -696,8 +695,8 @@
             `, { title: '계약단가 산출 기준' });
             
             // Step 4: 발주실적 매핑
-            setProgress(55, '발주실적 조회');
-            updateStepCount(4, 6);
+            setProgress(65, '발주실적 조회');
+            updateStepCount(4, 5);
             
             await addAgentCard('rule', `
                 <div class="space-y-2 text-xs">
@@ -713,8 +712,8 @@
             `, { title: '발주실적 기반 예상단가' });
             
             // API 호출
-            setProgress(70, '결과 생성');
-            updateStepCount(5, 6);
+            setProgress(80, '결과 생성');
+            updateStepCount(5, 5);
             
             const res = await fetch('/api/screen1/analyze', {
                 method: 'POST',
@@ -726,8 +725,9 @@
             if (!data.success) throw new Error(data.error || '분석 실패');
             
             // 결과 요약 카드
-            const mappedCount = data.results.filter(r => r.mapped).length;
-            const unmappedCount = data.results.length - mappedCount;
+            const summary = data.summary || {};
+            const mappedCount = summary.mapped || data.results.filter(r => r.mapped).length;
+            const unmappedCount = summary.unmapped || data.results.length - mappedCount;
             
             const resultType = mappedCount >= unmappedCount * 2 ? 'result-good' : 'result-normal';
             await addAgentCard(resultType, `
@@ -747,52 +747,13 @@
                 </div>
             `, { title: '분석 완료', badge: '<span class="badge badge-good">완료</span>' });
             
-            // Step 6: LLM 분석
-            setProgress(85, 'AI 추천 근거 생성');
-            updateStepCount(6, 6);
-            
-            await addAgentCard('llm', '', { title: 'AI 추천 근거 생성', typing: true });
-            const llmCard = document.querySelector('.agent-card.llm:last-child .card-content');
-            
-            // AI 분석 텍스트 생성
-            const aiText = generateScreen1AIAnalysis(data.results);
-            await typeText(llmCard, aiText, 12);
-            
             setProgress(100, '완료');
             
             // 결과 테이블 렌더링
-            renderScreen1Results(data.results);
+            renderScreen1Results(data.results, data.summary);
         }
 
-        function generateScreen1AIAnalysis(results) {
-            const mapped = results.filter(r => r.mapped);
-            const unmapped = results.filter(r => !r.mapped);
-            
-            let text = `[분석 요약]\n`;
-            text += `• 단가테이블 매핑 성공: ${mapped.length}건 → 계약단가 기준 추천\n`;
-            text += `• 미매핑: ${unmapped.length}건 → 발주×90% 기준 추천\n\n`;
-            
-            text += `[핵심 인사이트]\n`;
-            
-            let savings = 0;
-            for (const r of mapped.slice(0, 3)) {
-                if (r.rule3_contractPrice && r.recentPrice) {
-                    const diff = r.recentPrice - r.rule3_contractPrice;
-                    if (diff > 0) {
-                        savings += diff;
-                        text += `• ${r.valveType}: 계약단가 ${fmt(r.rule3_contractPrice)}원 적용 시 ${fmt(diff)}원 절감\n`;
-                    }
-                }
-            }
-            
-            if (savings > 0) {
-                text += `\n💰 예상 절감액: ${fmt(savings)}원 (상위 3건)`;
-            }
-            
-            return text;
-        }
-
-        function renderScreen1Results(results) {
+        function renderScreen1Results(results, summary) {
             document.getElementById('screen1-intro').classList.add('hidden');
             const container = document.getElementById('screen1-results');
             container.classList.remove('hidden');
@@ -801,33 +762,35 @@
             <div class="mb-5">
                 <h3 class="text-lg font-bold flex items-center gap-2 mb-2">
                     <i class="fas fa-table text-blue-400"></i>
-                    PR 건별 최적 추천 단가 제안
+                    PR 건별 단가 분석 결과
                 </h3>
-                <p class="text-xs text-gray-500">행을 클릭하면 상세 단가 산출 근거가 펼쳐집니다</p>
+                <p class="text-xs text-gray-500">
+                    전체 ${summary?.total || results.length}건 (매핑 ${summary?.mapped || '-'}건 / 미매핑 ${summary?.unmapped || '-'}건) | 행을 클릭하면 상세 정보가 펼쳐집니다
+                </p>
             </div>
             
             <div class="overflow-x-auto rounded-xl border border-gray-700/50" style="max-height: calc(100vh - 320px);">
                 <table class="prd-table">
                     <thead>
                         <tr>
-                            <th class="section-header" colspan="2">PR 세부 내역</th>
-                            <th class="section-header" colspan="3">계약단가 (기본+옵션)</th>
+                            <th class="section-header" colspan="5">PR 세부 내역</th>
+                            <th class="section-header" colspan="3">계약단가 (본가+옵션)</th>
                             <th class="section-header" colspan="3">최근발주단가 (실적)</th>
                             <th class="section-header">발주×90%</th>
-                            <th class="section-header" colspan="2">AI 추천</th>
                         </tr>
                         <tr>
-                            <th style="width:60px">PR</th>
-                            <th style="min-width:180px">자재번호/내역</th>
-                            <th style="width:90px">BODY2</th>
-                            <th style="width:90px">옵션</th>
+                            <th style="width:50px">No</th>
+                            <th style="min-width:150px">V/V TYPE</th>
+                            <th style="width:70px">V/V NO</th>
+                            <th style="width:60px">수량</th>
+                            <th style="width:70px">총중량</th>
+                            <th style="width:90px">본가</th>
+                            <th style="width:80px">옵션</th>
                             <th style="width:100px" class="highlight">합계</th>
                             <th style="width:70px">업체</th>
                             <th style="width:70px">일자</th>
                             <th style="width:100px">금액</th>
-                            <th style="width:100px">금액</th>
-                            <th style="width:110px" class="recommend">추천단가</th>
-                            <th style="width:90px">근거</th>
+                            <th style="width:100px" class="recommend">금액</th>
                         </tr>
                     </thead>
                     <tbody id="screen1-tbody">`;
@@ -838,39 +801,46 @@
                     ? '<span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-1"></span>' 
                     : '<span class="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-1"></span>';
                 
+                // 중량 표시
+                const weightDisplay = r.totalWeight 
+                    ? `${r.totalWeight.toFixed(3)} TN` 
+                    : (r.unitWeight ? `${r.unitWeight} kg` : '-');
+                
                 html += `
                     <tr onclick="toggleDetail1(${i}, this)" id="row-${i}">
-                        <td class="font-semibold text-blue-300">PR${String(i+1).padStart(3,'0')}</td>
+                        <td class="font-semibold text-blue-300">${String(i+1).padStart(3,'0')}</td>
                         <td class="text-left">
                             <div class="flex items-center">
                                 ${mappedBadge}
                                 <span class="mono text-xs text-blue-300">${r.valveType || '-'}</span>
                             </div>
-                            <div class="text-xs text-gray-500 truncate mt-1" style="max-width:170px" title="${r.description}">${r.description || '-'}</div>
+                            <div class="text-xs text-gray-500 truncate mt-1" style="max-width:140px" title="${r.description}">${r.description || '-'}</div>
                         </td>
-                        <td class="text-right price ${r.mapped ? '' : 'text-gray-500'}">${fmt(r.rule1_body2)}</td>
-                        <td class="text-right price">${fmt(r.rule2_option)}</td>
-                        <td class="text-right price highlight font-semibold">${fmt(r.rule3_contractPrice)}</td>
+                        <td class="mono text-xs">${r.valveNo || '-'}</td>
+                        <td class="text-center">${r.quantity} ${r.uom || 'EA'}</td>
+                        <td class="text-xs text-gray-400">${weightDisplay}</td>
+                        <td class="text-right price ${r.mapped ? '' : 'text-gray-500'}">${fmt(r.body2Price)}</td>
+                        <td class="text-right price">${fmt(r.optionPrice)}</td>
+                        <td class="text-right price highlight font-semibold">${fmt(r.contractPrice)}</td>
                         <td class="text-xs">${r.recentOrder?.vendor?.substring(0, 4) || '-'}</td>
                         <td class="text-xs text-gray-400">${r.recentOrder?.date?.substring(5) || '-'}</td>
                         <td class="text-right price">${fmt(r.recentPrice)}</td>
-                        <td class="text-right price text-yellow-400">${fmt(r.recent90)}</td>
-                        <td class="text-right price recommend">${fmt(r.recommendedPrice)}</td>
-                        <td class="text-xs">${r.recommendReason || '-'}</td>
+                        <td class="text-right price recommend text-yellow-400">${fmt(r.recent90)}</td>
                     </tr>
                     <tr id="detail-${i}" class="hidden">
-                        <td colspan="11" class="p-0 bg-transparent">
+                        <td colspan="12" class="p-0 bg-transparent">
                             <div class="detail-panel">
                                 <div class="grid grid-cols-3 gap-6">
                                     <div>
                                         <h4 class="font-semibold text-blue-400 mb-3 flex items-center gap-2">
-                                            <i class="fas fa-route"></i>밸브타입 매핑
+                                            <i class="fas fa-info-circle"></i>PR 상세 정보
                                         </h4>
                                         <div class="space-y-2 text-xs text-gray-300">
-                                            <div class="flex justify-between"><span class="text-gray-500">원본:</span><span class="mono">${r.valveType}</span></div>
-                                            <div class="flex justify-between"><span class="text-gray-500">매핑키:</span><span class="mono">${r.valveTypeBase}</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">V/V TYPE:</span><span class="mono">${r.valveType}</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">V/V NO:</span><span class="mono">${r.valveNo || '-'}</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">수량:</span><span>${r.quantity} ${r.uom || 'EA'}</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">총중량:</span><span>${weightDisplay}</span></div>
                                             <div class="flex justify-between"><span class="text-gray-500">매핑:</span><span class="${r.mapped ? 'text-green-400' : 'text-yellow-400'}">${r.mapped ? '✅ 성공' : '⚠️ 미매핑'}</span></div>
-                                            <div class="flex justify-between"><span class="text-gray-500">수량:</span><span>${r.quantity}개 ${r.tableQty ? `(표: ${r.tableQty}개)` : ''}</span></div>
                                         </div>
                                     </div>
                                     <div>
@@ -878,9 +848,10 @@
                                             <i class="fas fa-cogs"></i>단가 산출 근거
                                         </h4>
                                         <div class="space-y-2 text-xs text-gray-300">
-                                            <div class="flex justify-between"><span class="text-gray-500">기본단가 (BODY2):</span><span class="mono">${r.mapped ? fmt(r.rule1_body2) + '원' : '미매핑'}</span></div>
-                                            <div class="flex justify-between"><span class="text-gray-500">옵션단가:</span><span class="mono">${fmt(r.rule2_option)}원</span></div>
-                                            <div class="flex justify-between"><span class="text-gray-500">계약단가 합계:</span><span class="mono font-semibold text-yellow-400">${fmt(r.rule3_contractPrice)}원</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">본가 (BODY2):</span><span class="mono">${r.mapped ? fmt(r.body2Price) + '원' : '미매핑'}</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">옵션단가:</span><span class="mono">${fmt(r.optionPrice)}원</span></div>
+                                            <div class="flex justify-between"><span class="text-gray-500">계약단가 합계:</span><span class="mono font-semibold text-yellow-400">${fmt(r.contractPrice)}원</span></div>
+                                            ${r.tableQty ? `<div class="flex justify-between"><span class="text-gray-500">단가표 수량:</span><span>${r.tableQty}개 기준</span></div>` : ''}
                                         </div>
                                     </div>
                                     <div>
@@ -893,13 +864,14 @@
                                                 <div class="flex justify-between"><span class="text-gray-500">업체:</span><span>${r.recentOrder.vendor}</span></div>
                                                 <div class="flex justify-between"><span class="text-gray-500">일자:</span><span>${r.recentOrder.date}</span></div>
                                                 <div class="flex justify-between"><span class="text-gray-500">금액:</span><span class="mono">${fmt(r.recentPrice)}원</span></div>
+                                                <div class="flex justify-between"><span class="text-gray-500">×90%:</span><span class="mono text-yellow-400">${fmt(r.recent90)}원</span></div>
                                             ` : '<div class="text-gray-500">발주실적 없음</div>'}
                                         </div>
                                     </div>
                                 </div>
-                                ${r.rule2_optionDetails?.length ? `
+                                ${r.optionDetails?.length ? `
                                 <div class="mt-4 pt-4 border-t border-gray-700">
-                                    <span class="text-xs text-gray-400"><i class="fas fa-tags mr-1"></i>옵션 상세: <span class="text-purple-300">${r.rule2_optionDetails.join(', ')}</span></span>
+                                    <span class="text-xs text-gray-400"><i class="fas fa-tags mr-1"></i>옵션 상세: <span class="text-purple-300">${r.optionDetails.join(', ')}</span></span>
                                 </div>
                                 ` : ''}
                             </div>

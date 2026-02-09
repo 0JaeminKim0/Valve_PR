@@ -253,33 +253,43 @@ def screen1_analyze():
     results = []
     
     logs.append({'type': 'header', 'text': '📋 화면 1: PR 건 최적 추천 단가 제안'})
-    logs.append({'type': 'info', 'text': 'Rule1(BODY2) + Rule2(옵션) + Rule3(수량환산) → 계약단가'})
+    logs.append({'type': 'info', 'text': '본가(BODY2) + 옵션단가 + 수량환산 → 계약단가'})
     logs.append({'type': 'info', 'text': '과거 실적 최근 발주단가 (1순위: 타입+내역일치, 2순위: 타입만)'})
     
-    # PR 샘플 선택 (매핑 7건 + 미매핑 3건)
-    logs.append({'type': 'subheader', 'text': 'Step 1: PR 샘플 선택'})
+    # PR 전체 데이터 선택 (시황 분석 대상 전체)
+    logs.append({'type': 'subheader', 'text': 'Step 1: PR 데이터 추출'})
     
-    pr_m = df4[df4['Valve Type'].apply(lambda x: str(x)[:-1] in p_idx if pd.notna(x) else False)].drop_duplicates('Valve Type').sort_values('발주일', ascending=False).head(7)
-    pr_u = df4[(df4['Valve Type'].notna()) & (~df4['Valve Type'].apply(lambda x: str(x)[:-1] in p_idx))].drop_duplicates('Valve Type').sort_values('발주일', ascending=False).head(3)
-    pr_all = pd.concat([pr_m, pr_u])
+    # Valve Type이 있는 모든 데이터를 대상으로 함
+    pr_all = df4[df4['Valve Type'].notna()].drop_duplicates('Valve Type').sort_values('발주일', ascending=False).copy()
     
-    logs.append({'type': 'success', 'text': f'매핑 {len(pr_m)}건 + 미매핑 {len(pr_u)}건 = 총 {len(pr_all)}건 선택'})
+    # 매핑 가능 여부 분류
+    pr_all['mappable'] = pr_all['Valve Type'].apply(lambda x: str(x)[:-1] in p_idx if pd.notna(x) else False)
+    mapped_count = int(pr_all['mappable'].sum())
+    unmapped_count = int(len(pr_all) - mapped_count)
+    
+    logs.append({'type': 'success', 'text': f'전체 {len(pr_all)}건 (매핑 가능 {mapped_count}건 + 미매핑 {unmapped_count}건)'})
     
     logs.append({'type': 'subheader', 'text': 'Step 2: PR 건별 단가 분석'})
     
     for seq, (_, pr) in enumerate(pr_all.iterrows(), 1):
         vf = pr['Valve Type']
-        vt = vf[:-1]  # 끝자리 제거 (Rule 1 매핑)
+        vt = vf[:-1]  # 끝자리 제거 (매핑)
         desc = pr['내역']
         qty = pr['발주수량'] if pd.notna(pr['발주수량']) else 1
         
-        # Rule 1: BODY2 기본단가
+        # 추가 정보 추출
+        uom = pr.get('UOM', 'EA')
+        valve_no = pr.get('Valve No', '')
+        total_weight = pr.get('발주총중량(TN)', None)
+        unit_weight = pr.get('단중(kg)', None)
+        
+        # 본가 (BODY2)
         ub, b2t, tq = get_body2(vt, qty)
         
-        # Rule 2: 옵션단가
+        # 옵션단가
         op, od = get_opts(vt, desc)
         
-        # Rule 3: 계약단가 (BODY2 + 옵션)
+        # 계약단가 (본가 + 옵션)
         ct = (ub + op) if ub else None
         
         # 과거 발주 실적
@@ -287,42 +297,48 @@ def screen1_analyze():
         rp = best['금액'] if best else None
         r90 = rp * 0.9 if rp else None
         
-        # 로그 생성
-        box_lines = [
-            f'밸브타입: {vf} → 매핑키: {vt}',
-            f'내역: {str(desc)[:65]}',
-            f'수량: {qty}' + (f' (단가표 {tq}개 기준 환산)' if tq and tq != 1 else '')
-        ]
-        
-        if ub:
-            box_lines.append(f'✅ Rule1 BODY2: {fmt(ub)}')
-            box_lines.append(f'✅ Rule2 옵션: {", ".join(od) if od else "없음"} → {fmt(op)}')
-            box_lines.append(f'★ Rule3 계약단가: {fmt(ct)}')
-        else:
-            box_lines.append('⚠️ 단가테이블 미매핑')
-        
-        if best:
-            box_lines.append(f'📈 최근발주: {fmt(rp)} ({best["업체"]}, {best["일자"]}) [{best["순위"]}]')
-            box_lines.append(f'📈 발주×90%: {fmt(r90)}')
-        else:
-            box_lines.append('⚠️ 발주실적 없음')
-        
-        logs.append({'type': 'box', 'seq': seq, 'lines': box_lines})
+        # 로그 생성 (처음 10건만 상세 로그)
+        if seq <= 10:
+            box_lines = [
+                f'밸브타입: {vf} → 매핑키: {vt}',
+                f'내역: {str(desc)[:65]}',
+                f'수량: {qty} {uom}' + (f' (단가표 {tq}개 기준 환산)' if tq and tq != 1 else '')
+            ]
+            
+            if ub:
+                box_lines.append(f'✅ 본가 BODY2: {fmt(ub)}')
+                box_lines.append(f'✅ 옵션: {", ".join(od) if od else "없음"} → {fmt(op)}')
+                box_lines.append(f'★ 계약단가: {fmt(ct)}')
+            else:
+                box_lines.append('⚠️ 단가테이블 미매핑')
+            
+            if best:
+                box_lines.append(f'📈 최근발주: {fmt(rp)} ({best["업체"]}, {best["일자"]}) [{best["순위"]}]')
+                box_lines.append(f'📈 발주×90%: {fmt(r90)}')
+            else:
+                box_lines.append('⚠️ 발주실적 없음')
+            
+            logs.append({'type': 'box', 'seq': seq, 'lines': box_lines})
         
         # 결과 저장
         results.append({
             'no': seq,
             'valveType': vf,
             'valveTypeBase': vt,
-            'description': str(desc)[:60],
+            'description': str(desc)[:80] if desc else '',
             'quantity': int(qty) if pd.notna(qty) else 1,
+            'uom': str(uom) if pd.notna(uom) else 'EA',
+            'valveNo': str(valve_no) if pd.notna(valve_no) else '',
+            'totalWeight': float(total_weight) if pd.notna(total_weight) else None,
+            'unitWeight': float(unit_weight) if pd.notna(unit_weight) else None,
+            'weightUnit': 'TN' if total_weight else ('kg' if unit_weight else ''),
             'tableQty': int(tq) if tq else None,
             'mapped': bool(ub),
-            # Rule 1/2/3 계약단가
-            'rule1_body2': ub,
-            'rule2_option': op,
-            'rule2_optionDetails': od,
-            'rule3_contractPrice': ct,
+            # 본가/옵션/계약단가
+            'body2Price': ub,
+            'optionPrice': op,
+            'optionDetails': od,
+            'contractPrice': ct,
             # 과거 발주 실적
             'recentOrder': {
                 'rank': best['순위'] if best else None,
@@ -331,46 +347,23 @@ def screen1_analyze():
                 'amount': rp
             } if best else None,
             'recentPrice': rp,
-            'recent90': r90,
-            # 추천 단가
-            'recommendedPrice': min(ct, rp) if ct and rp else (r90 if rp else ct),
-            'recommendReason': '계약단가 기준' if ct and rp and ct <= rp else ('발주실적 기준' if rp else '계약단가')
+            'recent90': r90
         })
     
-    # AI 분석
-    logs.append({'type': 'subheader', 'text': 'Step 3: 🤖 AI Agent 분석'})
+    if len(pr_all) > 10:
+        logs.append({'type': 'info', 'text': f'... 외 {len(pr_all) - 10}건 (상세 로그 생략)'})
     
-    fb_lines = []
-    for d in results:
-        if d['rule3_contractPrice'] and d['recentPrice']:
-            g = pct(d['rule3_contractPrice'], d['recentPrice'])
-            rec = min(d['rule3_contractPrice'], d['recentPrice'])
-            fb_lines.append(f"• {d['valveType']}: 계약{fmt(d['rule3_contractPrice'])} vs 발주{fmt(d['recentPrice'])} ({g:+.0f}%) → 추천: {fmt(rec)}")
-        elif d['recentPrice']:
-            fb_lines.append(f"• {d['valveType']}: 미매핑 → 추천: 발주×90%={fmt(d['recent90'])}")
-        else:
-            fb_lines.append(f"• {d['valveType']}: 데이터부족 → 견적수집 필요")
-    
-    ai_analysis = '\n'.join(fb_lines)
-    
-    if API_KEY:
-        prompt = f"PR 건별 단가비교. 추천단가+근거를 건별 1줄로.\n{json.dumps([{'밸브': d['valveType'], '계약': d['rule3_contractPrice'], '발주': d['recentPrice']} for d in results], ensure_ascii=False, default=str)}"
-        llm_result = llm_simple(prompt, "조선/해양 밸브 구매 분석 전문가. 한국어 답변.")
-        if llm_result:
-            ai_analysis = llm_result
-            logs.append({'type': 'agent', 'isApi': True, 'text': llm_result})
-        else:
-            logs.append({'type': 'agent', 'isApi': False, 'text': '\n'.join(fb_lines)})
-    else:
-        logs.append({'type': 'agent', 'isApi': False, 'text': '\n'.join(fb_lines)})
-    
-    logs.append({'type': 'success', 'text': f'분석 완료 - {len(results)}건'})
+    logs.append({'type': 'success', 'text': f'분석 완료 - 총 {len(results)}건'})
     
     return jsonify({
         'success': True,
         'logs': logs,
         'results': results,
-        'aiAnalysis': ai_analysis
+        'summary': {
+            'total': len(results),
+            'mapped': mapped_count,
+            'unmapped': unmapped_count
+        }
     })
 
 @app.route('/api/screen2/analyze', methods=['POST'])
