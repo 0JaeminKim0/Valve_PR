@@ -513,6 +513,9 @@ def screen3_analyze():
     
     trend_data = []
     main_v = mv.groupby('발주업체')['n'].sum().idxmax() if not mv.empty else None
+    # 2순위 업체 (금강)
+    vendor_counts = mv.groupby('발주업체')['n'].sum().sort_values(ascending=False)
+    sub_v_global = vendor_counts.index[1] if len(vendor_counts) > 1 else None
     
     # Cu+Sn 가중 가격 계산 (USD/톤 → 가중평균)
     def calc_cusn_price(m):
@@ -535,6 +538,8 @@ def screen3_analyze():
         # 업체별 실제 단가 (KRW)
         vendor_prices = {}
         main_price = None
+        sub_price = None  # 금강 (2순위 업체)
+        sub_v = None
         for v in vendors:
             vd = mv[(mv['발주업체'] == v) & (mv['M'] == m)]
             if not vd.empty:
@@ -542,6 +547,9 @@ def screen3_analyze():
                 vendor_prices[v[:6]] = round(price)
                 if v == main_v:
                     main_price = price
+                elif sub_v is None:
+                    sub_v = v
+                    sub_price = price
             else:
                 vendor_prices[v[:6]] = None
         
@@ -572,11 +580,13 @@ def screen3_analyze():
             'lagMonth': lag_month if lag_month >= 1 else None,
             'lagCuSnPrice': round(lag_cusn_price) if lag_cusn_price else None,
             'gapPct': round(gap_pct, 1) if gap_pct else None,
-            # 지수 데이터도 유지 (호환성)
+            # 지수 데이터
             'cuIndex': round(cu_price / cu_base * 100, 1),
             'snIndex': round(sn_price / sn_base * 100, 1),
             'cuSnIndex': round(cusn_price / (cu_base * 0.88 + sn_base * 0.12) * 100, 1),
-            'mainVendorIndex': round(main_price / v_base[main_v] * 100, 1) if main_price and v_base.get(main_v) else None
+            'mainVendorIndex': round(main_price / v_base[main_v] * 100, 1) if main_price and v_base.get(main_v) else None,
+            # 금강 지수 추가
+            'subVendorIndex': round(sub_price / v_base[sub_v_global] * 100, 1) if sub_price and v_base.get(sub_v_global) else None
         })
         
         # 로그
@@ -681,7 +691,8 @@ def screen3_analyze():
             'snYearChange': sn_year_change,
             'totalOrders': len(bc),
             'vendors': vendors,
-            'mainVendor': main_v
+            'mainVendor': main_v,
+            'subVendor': sub_v_global
         },
         'lmeData': [{'month': m, **d} for m, d in lme_monthly.items()],
         'aiAnalysis': ai_analysis

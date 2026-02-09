@@ -1377,28 +1377,41 @@ Bad 판정 ${ac.Bad}개월 (${badMonths.join(', ') || '없음'}) - 시황 하락
             if (!ctx) return;
 
             const months = data.trendData.map(d => d.monthLabel);
-            const cuSnIndex = data.trendData.map(d => d.cuSnIndex);
+            const cuIndex = data.trendData.map(d => d.cuIndex);
+            const snIndex = data.trendData.map(d => d.snIndex);
             const mainVendorIndex = data.trendData.map(d => d.mainVendorIndex);
+            const subVendorIndex = data.trendData.map(d => d.subVendorIndex);
 
-            // 참고 파일 스타일 그대로 적용
+            // 참고 파일 (bc_valve_trend_analysis.html) 스타일 그대로 적용
             chartInstances.trend = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: months,
                     datasets: [
                         {
-                            label: 'Cu+Sn 가중지수',
-                            data: cuSnIndex,
+                            label: '구리 (Cu)',
+                            data: cuIndex,
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239,68,68,0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#ef4444',
+                        },
+                        {
+                            label: '주석 (Sn)',
+                            data: snIndex,
                             borderColor: '#f59e0b',
                             backgroundColor: 'rgba(245,158,11,0.1)',
-                            borderWidth: 2.5,
-                            fill: true,
+                            borderWidth: 2,
+                            fill: false,
                             tension: 0.3,
-                            pointRadius: 4,
+                            pointRadius: 3,
                             pointBackgroundColor: '#f59e0b',
                         },
                         {
-                            label: data.summary.mainVendor ? data.summary.mainVendor.substring(0, 4) : '업체',
+                            label: data.summary.mainVendor ? data.summary.mainVendor.substring(0, 4) : '원광',
                             data: mainVendorIndex,
                             borderColor: '#3b82f6',
                             borderWidth: 2.5,
@@ -1408,11 +1421,21 @@ Bad 판정 ${ac.Bad}개월 (${badMonths.join(', ') || '없음'}) - 시황 하락
                             spanGaps: true,
                         },
                         {
+                            label: data.summary.subVendor ? data.summary.subVendor.substring(0, 2) : '금강',
+                            data: subVendorIndex,
+                            borderColor: '#10b981',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#10b981',
+                            spanGaps: true,
+                        },
+                        {
                             label: '기준선 (100)',
                             data: Array(12).fill(100),
-                            borderColor: 'rgba(255,255,255,0.15)',
+                            borderColor: 'rgba(255,255,255,0.2)',
                             borderWidth: 1,
-                            borderDash: [2, 4],
+                            borderDash: [3, 3],
                             pointRadius: 0,
                         }
                     ]
