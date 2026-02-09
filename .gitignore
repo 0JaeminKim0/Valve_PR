@@ -28,3 +28,4 @@ ecosystem.config.cjs
 # Temporary files
 *.tmp
 *.temp
+__pycache__/

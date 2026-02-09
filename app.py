@@ -479,11 +479,11 @@ def screen2_analyze():
 
 @app.route('/api/screen3/analyze', methods=['POST'])
 def screen3_analyze():
-    """화면 3: 원재료 시황 × 발주단가 분석"""
+    """화면 3: 원재료 시황 × 발주단가 분석 (4개월 시차 적용)"""
     logs = []
     
     logs.append({'type': 'header', 'text': '📋 화면 3: 원재료 시황 × 발주단가 종합 분석'})
-    logs.append({'type': 'info', 'text': '🌐 LME 시황 vs 업체별 발주단가 트렌드 (1월=100 지수)'})
+    logs.append({'type': 'info', 'text': '🌐 LME 시황 vs 업체별 발주단가 트렌드 (4개월 시차 적용)'})
     
     # BC밸브 필터링
     bc = df4[df4['Valve Type'].str.startswith('VGBARR240A', na=False)].copy()
@@ -497,12 +497,14 @@ def screen3_analyze():
     vendors = list(mv['발주업체'].unique())
     logs.append({'type': 'success', 'text': f'BC밸브: {len(bc)}건 | 업체: {", ".join([v[:6] for v in vendors])}'})
     
-    logs.append({'type': 'subheader', 'text': 'Step 1: 시황 vs 업체별 단가 트렌드 (1월=100)'})
+    logs.append({'type': 'subheader', 'text': 'Step 1: 시황 vs 업체별 단가 트렌드 (4개월 시차)'})
+    logs.append({'type': 'info', 'text': '📌 원재료 시황 4개월 → 업체 단가 반영 (예: 1월 원재료 → 5월 업체단가)'})
     
-    # 기준값
+    # 기준값 (1월 데이터)
     cu_base = lme_monthly.get(1, {}).get('Cu', 1)
     sn_base = lme_monthly.get(1, {}).get('Sn', 1)
     
+    # 업체별 기준 단가 (1월)
     v_base = {}
     for v in vendors:
         vd = mv[(mv['발주업체'] == v) & (mv['M'] == 1)]
@@ -516,51 +518,80 @@ def screen3_analyze():
     trend_data = []
     main_v = mv.groupby('발주업체')['n'].sum().idxmax() if not mv.empty else None
     
+    # Cu+Sn 가중 가격 계산 (USD/톤 → 가중평균)
+    def calc_cusn_price(m):
+        if m not in lme_monthly:
+            return None
+        cu = lme_monthly[m]['Cu']
+        sn = lme_monthly[m]['Sn']
+        return cu * 0.88 + sn * 0.12
+    
+    LAG_MONTHS = 4  # 4개월 시차
+    
     for m in range(1, 13):
         if m not in lme_monthly:
             continue
         
-        cu_idx = lme_monthly[m]['Cu'] / cu_base * 100
-        sn_idx = lme_monthly[m]['Sn'] / sn_base * 100
-        cusn_idx = cu_idx * 0.88 + sn_idx * 0.12
+        cu_price = lme_monthly[m]['Cu']
+        sn_price = lme_monthly[m]['Sn']
+        cusn_price = cu_price * 0.88 + sn_price * 0.12  # 가중 평균 단가 (USD/톤)
         
-        vendor_indices = {}
-        main_idx = None
+        # 업체별 실제 단가 (KRW)
+        vendor_prices = {}
+        main_price = None
         for v in vendors:
             vd = mv[(mv['발주업체'] == v) & (mv['M'] == m)]
-            if not vd.empty and v in v_base:
-                idx = vd.iloc[0]['avg'] / v_base[v] * 100
-                vendor_indices[v[:6]] = round(idx, 1)
+            if not vd.empty:
+                price = vd.iloc[0]['avg']
+                vendor_prices[v[:6]] = round(price)
                 if v == main_v:
-                    main_idx = idx
+                    main_price = price
             else:
-                vendor_indices[v[:6]] = None
+                vendor_prices[v[:6]] = None
         
-        # 괴리 계산
-        gap = None
-        if main_idx:
-            expected_idx = 100 + (cusn_idx - 100) * 0.8
-            gap = main_idx - expected_idx
+        # 4개월 전 원재료 시황과 비교 (m월 업체단가 vs m-4월 원재료)
+        lag_month = m - LAG_MONTHS
+        lag_cusn_price = calc_cusn_price(lag_month) if lag_month >= 1 else None
+        
+        # 괴리율 계산 (4개월 시차 기준)
+        gap_pct = None
+        if main_price and lag_cusn_price and v_base.get(main_v):
+            # 4개월 전 원재료 변화율
+            base_cusn = calc_cusn_price(1)
+            if base_cusn:
+                market_change_pct = (lag_cusn_price / base_cusn - 1) * 100
+                price_change_pct = (main_price / v_base[main_v] - 1) * 100
+                # 괴리: 업체단가 변화율 - 예상 변화율(원재료 80% 반영)
+                expected_change = market_change_pct * 0.8
+                gap_pct = price_change_pct - expected_change
         
         trend_data.append({
             'month': m,
             'monthLabel': f'{m}월',
-            'cuIndex': round(cu_idx, 1),
-            'snIndex': round(sn_idx, 1),
-            'cuSnIndex': round(cusn_idx, 1),
-            'vendorIndices': vendor_indices,
-            'mainVendorIndex': round(main_idx, 1) if main_idx else None,
-            'gap': round(gap, 1) if gap else None
+            'cuPrice': round(cu_price),
+            'snPrice': round(sn_price),
+            'cuSnPrice': round(cusn_price),
+            'vendorPrices': vendor_prices,
+            'mainVendorPrice': round(main_price) if main_price else None,
+            'lagMonth': lag_month if lag_month >= 1 else None,
+            'lagCuSnPrice': round(lag_cusn_price) if lag_cusn_price else None,
+            'gapPct': round(gap_pct, 1) if gap_pct else None,
+            # 지수 데이터도 유지 (호환성)
+            'cuIndex': round(cu_price / cu_base * 100, 1),
+            'snIndex': round(sn_price / sn_base * 100, 1),
+            'cuSnIndex': round(cusn_price / (cu_base * 0.88 + sn_base * 0.12) * 100, 1),
+            'mainVendorIndex': round(main_price / v_base[main_v] * 100, 1) if main_price and v_base.get(main_v) else None
         })
         
         # 로그
-        emoji = '🟢' if gap and gap < -2 else ('🔴' if gap and gap > 2 else '🟡')
-        gap_str = f'{emoji}{gap:+.1f}' if gap else '·'
-        main_str = f'{main_idx:.1f}' if main_idx else '·'
-        logs.append({'type': 'info', 'text': f'  {m:2d}월 │ Cu+Sn: {cusn_idx:6.1f} │ {main_v[:4] if main_v else "업체"}: {main_str:>6} │ 괴리: {gap_str}'})
+        lag_str = f'(vs {lag_month}월 시황)' if lag_month and lag_month >= 1 else '(시차 미적용)'
+        emoji = '🟢' if gap_pct and gap_pct < -2 else ('🔴' if gap_pct and gap_pct > 2 else '🟡')
+        gap_str = f'{emoji}{gap_pct:+.1f}%' if gap_pct else '·'
+        main_str = f'{main_price:,.0f}' if main_price else '·'
+        logs.append({'type': 'info', 'text': f'  {m:2d}월 │ Cu+Sn: ${cusn_price:,.0f} │ {main_v[:4] if main_v else "업체"}: ₩{main_str} │ 괴리: {gap_str} {lag_str}'})
     
-    # 적정성 판정
-    logs.append({'type': 'subheader', 'text': 'Step 2: 월별 적정성 판정'})
+    # 적정성 판정 (4개월 시차 기준)
+    logs.append({'type': 'subheader', 'text': 'Step 2: 월별 적정성 판정 (4개월 시차 기준)'})
     
     def trend(c, th=2.0):
         if abs(c) <= th:
@@ -575,23 +606,37 @@ def screen3_analyze():
     
     md2 = mv[mv['발주업체'] == main_v].sort_values('M') if main_v else pd.DataFrame()
     assessments = {}
-    prev_p, prev_cusn = None, None
+    prev_p, prev_lag_cusn = None, None
     
     for _, row in md2.iterrows():
         m = int(row['M'])
         p = row['avg']
-        if m not in lme_monthly:
-            continue
-        cusn = lme_monthly[m]['Cu'] * 0.88 + lme_monthly[m]['Sn'] * 0.12
+        lag_m = m - LAG_MONTHS
         
-        if prev_p and prev_cusn:
+        if lag_m < 1 or lag_m not in lme_monthly:
+            prev_p = p
+            if lag_m >= 1 and lag_m in lme_monthly:
+                prev_lag_cusn = calc_cusn_price(lag_m)
+            continue
+        
+        lag_cusn = calc_cusn_price(lag_m)
+        
+        if prev_p and prev_lag_cusn and lag_cusn:
             pchg = (p - prev_p) / prev_p * 100
-            cchg = (cusn - prev_cusn) / prev_cusn * 100
+            cchg = (lag_cusn - prev_lag_cusn) / prev_lag_cusn * 100
             pt, mt = trend(pchg), trend(cchg)
             label, emoji = AM.get((pt, mt), ("N/A", "⚪"))
-            assessments[m] = {'label': label, 'emoji': emoji, 'priceChange': round(pchg, 1), 'marketChange': round(cchg, 1)}
+            assessments[m] = {
+                'label': label, 
+                'emoji': emoji, 
+                'priceChange': round(pchg, 1), 
+                'marketChange': round(cchg, 1),
+                'lagMonth': lag_m,
+                'comparison': f'{lag_m}월 시황 → {m}월 단가'
+            }
         
-        prev_p, prev_cusn = p, cusn
+        prev_p = p
+        prev_lag_cusn = lag_cusn
     
     # 판정 요약
     assess_counts = {'Good': 0, 'Normal': 0, 'Bad': 0}
@@ -601,19 +646,26 @@ def screen3_analyze():
     logs.append({'type': 'highlight', 'text': f'🟢Good:{assess_counts["Good"]} 🟡Normal:{assess_counts["Normal"]} 🔴Bad:{assess_counts["Bad"]}'})
     
     # AI 분석
-    logs.append({'type': 'subheader', 'text': 'Step 3: 🤖 AI Agent 분석'})
+    logs.append({'type': 'subheader', 'text': 'Step 3: 🤖 AI Agent 분석 (4개월 시차 기준)'})
     
     good3 = assess_counts.get('Good', 0)
     bad3 = assess_counts.get('Bad', 0)
     bad_months = [str(m) for m, a in assessments.items() if a['label'] == 'Bad']
+    bad_details = [(m, a) for m, a in assessments.items() if a['label'] == 'Bad']
     
     fb_lines = [
+        f"[분석 기준] 원재료 시황 → 4개월 후 업체 단가 반영 가정",
         f"[정합성] {len(assessments)}개월 중 Good {good3}, Bad {bad3} → 시황 대비 발주 {'유리' if good3 >= bad3 else '불리'}",
         f"[업체 패턴]",
         f"  • 원광: 시황 상승에도 단가 안정 → 보수적 가격 전략",
-        f"  • Bad 월({', '.join(bad_months) if bad_months else '없음'}): 시황 하락분 미반영",
-        f"[전략] 단기: Bad월 소급인하 / 중기: LME연동 조항 / 장기: 복수업체 발굴"
     ]
+    
+    if bad_details:
+        fb_lines.append(f"  • Bad 월 상세:")
+        for m, a in bad_details[:3]:
+            fb_lines.append(f"    - {m}월: {a['lagMonth']}월 시황 {a['marketChange']:+.1f}% → 단가 {a['priceChange']:+.1f}%")
+    
+    fb_lines.append(f"[전략] 단기: Bad월 소급인하 / 중기: LME연동 조항(4개월 시차) / 장기: 복수업체 발굴")
     
     ai_analysis = '\n'.join(fb_lines)
     logs.append({'type': 'agent', 'isApi': False, 'text': ai_analysis})
