@@ -24,7 +24,7 @@ CORS(app)
 # ═══════════════════════════════════════════════════════
 # 설정
 # ═══════════════════════════════════════════════════════
-DATA_DIR = os.environ.get('DATA_DIR', '/home/user/uploaded_files')
+DATA_DIR = os.environ.get('DATA_DIR', os.path.join(os.path.dirname(__file__), 'data'))
 API_URL = "https://api.anthropic.com/v1/messages"
 MODEL = "claude-sonnet-4-20250514"
 API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
