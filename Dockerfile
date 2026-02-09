@@ -16,9 +16,7 @@ COPY . .
 
 # 환경 변수
 ENV PYTHONUNBUFFERED=1
+ENV PORT=8080
 
-# 시작 스크립트 생성
-RUN echo '#!/bin/bash\nexec gunicorn app:app --bind "0.0.0.0:${PORT:-3000}" --workers 2 --timeout 120' > /start.sh && chmod +x /start.sh
-
-# 실행
-CMD ["/bin/bash", "/start.sh"]
+# 실행 (Railway 포트 8080 사용)
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "120"]
