@@ -54,12 +54,26 @@ PR(구매요청) 자재별 최적 단가를 제안하고, 협력사 견적단가
 
 ## API 엔드포인트
 
+### 기본 API
 | Method | Endpoint | 설명 |
 |--------|----------|------|
 | GET | `/api/health` | 서버 상태 확인 |
-| POST | `/api/screen1/analyze` | PR 단가 분석 |
+| GET | `/api/price-table` | 단가테이블 전체 조회 |
+| GET | `/api/quotes` | 견적 전체 조회 |
+
+### 프론트엔드 분석 API
+| Method | Endpoint | 파라미터 | 설명 |
+|--------|----------|----------|------|
+| POST | `/api/analyze/price-recommendation` | `{valveType, quantity}` | 화면1: 최적 단가 제안 |
+| POST | `/api/analyze/quote-verification` | `{quoteIndex}` | 화면2: 견적 적정성 검증 |
+| POST | `/api/analyze/market-trend` | `{valveType}` | 화면3: 시황 트렌드 분석 |
+
+### 백엔드 일괄 분석 API
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| POST | `/api/screen1/analyze` | PR 단가 일괄 분석 |
 | POST | `/api/screen1/llm-analyze` | PR LLM 분석 |
-| POST | `/api/screen2/verify` | 견적 검증 |
+| POST | `/api/screen2/verify` | 견적 일괄 검증 |
 | POST | `/api/screen2/llm-analyze` | 견적 LLM 분석 |
 | GET | `/api/screen3/trend` | 시황 트렌드 |
 | POST | `/api/screen3/llm-analyze` | 시황 LLM 분석 |
@@ -116,7 +130,33 @@ webapp/
 
 - **개발 서버**: https://3000-ih3ml8qs487oelbx58ppv-2e77fc33.sandbox.novita.ai
 
+## 현재 완료된 기능
+
+✅ **화면 1: PR 최적 단가 제안**
+- 밸브타입 선택 드롭다운 (482개 타입)
+- BODY2 기본단가 + 옵션단가 계산
+- 최근 발주실적 기반 추천 단가 산출
+- Agentic UI 단계별 로그 표시
+
+✅ **화면 2: 협력사 견적 검증**
+- 견적 항목 선택 (159건)
+- 자재번호 → 밸브타입 매핑
+- 적정성 판정 (우수/보통/부적절)
+- 괴리율 계산 및 협상 전략 제시
+
+✅ **화면 3: 시황 분석**
+- VGBARR240AT 타입 654건 분석 (LOCK 제외, TR 포함 → 431건)
+- LME Cu/Sn 월별 시황 지수 (Cu 88% + Sn 12%)
+- 발주단가 지수 트렌드 Chart.js 시각화
+- 월별 적정성 판정 (Good/Normal/Bad)
+
+## 미완료 기능
+
+❌ Claude API 실제 연동 (API Key 필요)
+❌ Railway 배포 설정
+❌ 데모 모드 자동 실행
+
 ---
 
-**버전**: v1.0.0  
+**버전**: v1.1.0  
 **최종 수정**: 2026-02-09

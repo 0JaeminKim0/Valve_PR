@@ -265,8 +265,16 @@ app.get('/api/data/price-table', (req, res) => {
   res.json(priceTable.slice(0, 100));
 });
 
+app.get('/api/price-table', (req, res) => {
+  res.json({ success: true, data: priceTable });
+});
+
 app.get('/api/data/quotes', (req, res) => {
   res.json(quoteData);
+});
+
+app.get('/api/quotes', (req, res) => {
+  res.json({ success: true, data: quoteData });
 });
 
 app.get('/api/data/lme', (req, res) => {
@@ -275,6 +283,256 @@ app.get('/api/data/lme', (req, res) => {
 
 app.get('/api/data/bc-orders', (req, res) => {
   res.json(orderHistoryBC);
+});
+
+// ========== 프론트엔드 호환 API ==========
+
+// 화면 1: 최적 단가 추천 (프론트엔드용)
+app.post('/api/analyze/price-recommendation', async (req, res) => {
+  try {
+    const { valveType, quantity = 10 } = req.body;
+    
+    if (!valveType) {
+      return res.status(400).json({ success: false, error: '밸브타입이 필요합니다' });
+    }
+    
+    const valveTypeBase = valveType.slice(0, -1);
+    const bodyResult = getBodyPrice(valveTypeBase, quantity);
+    const optionResult = getOptions(valveTypeBase, '', '', '', '');
+    const contractPrice = bodyResult ? bodyResult.unitPrice + optionResult.total : null;
+    
+    const recentOrder = getRecentOrder(valveType);
+    const recentPrice = recentOrder?.amount || null;
+    const recent90 = recentPrice ? recentPrice * 0.9 : null;
+    
+    let recommendedPrice = null;
+    if (contractPrice && recentPrice) {
+      recommendedPrice = Math.min(contractPrice, recentPrice);
+    } else if (recent90) {
+      recommendedPrice = recent90;
+    } else if (contractPrice) {
+      recommendedPrice = contractPrice;
+    }
+    
+    // 최근 발주 평균 계산
+    const relatedOrders = orderHistoryAll.filter(o => o.valveType === valveType);
+    const recentOrderAvg = relatedOrders.length > 0 
+      ? relatedOrders.reduce((sum, o) => sum + (o.orderAmount || 0), 0) / relatedOrders.length
+      : null;
+    
+    const pricePerKg = bodyResult?.tableQty ? (recommendedPrice || 0) / bodyResult.tableQty * quantity : null;
+    
+    // AI 분석
+    let aiAnalysis = '';
+    if (process.env.ANTHROPIC_API_KEY) {
+      const prompt = `밸브타입 ${valveType} 분석:\n- 계약단가: ${contractPrice?.toLocaleString() || '없음'}원\n- 최근발주: ${recentPrice?.toLocaleString() || '없음'}원\n- 추천단가: ${recommendedPrice?.toLocaleString() || '없음'}원\n\n구매 담당자에게 이 단가의 적정성과 협상 전략을 1-2문장으로 조언해주세요.`;
+      aiAnalysis = await callClaude(prompt);
+    } else {
+      aiAnalysis = `${valveType} 타입의 추천 단가는 ${recommendedPrice?.toLocaleString() || '미정'}원입니다. ${contractPrice && recentPrice ? (contractPrice <= recentPrice ? '계약단가 기준이 유리합니다.' : '과거 발주실적 기준이 유리합니다.') : '데이터 기준 추천입니다.'}`;
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        valveType,
+        valveTypeBase,
+        quantity,
+        bodyPrice: bodyResult?.unitPrice || null,
+        optionPrice: optionResult.total,
+        optionDetails: optionResult.details,
+        contractPrice,
+        recentOrderInfo: recentOrder,
+        recentOrderAvg,
+        recommendedPrice,
+        pricePerKg,
+        aiAnalysis,
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// 화면 2: 견적 검증 (프론트엔드용)
+app.post('/api/analyze/quote-verification', async (req, res) => {
+  try {
+    const { quoteIndex } = req.body;
+    
+    if (quoteIndex === undefined || quoteIndex < 0 || quoteIndex >= quoteData.length) {
+      return res.status(400).json({ success: false, error: '유효하지 않은 견적 인덱스' });
+    }
+    
+    const quote = quoteData[quoteIndex];
+    const valveType = materialValveMap[quote.materialCore] || '';
+    const valveTypeBase = valveType.slice(0, -1);
+    
+    const bodyResult = getBodyPrice(valveTypeBase);
+    const optionResult = getOptions(valveTypeBase, quote.description, quote.innerPaint, quote.outerPaint, quote.spec);
+    const systemPrice = bodyResult ? bodyResult.unitPrice + optionResult.total : null;
+    
+    const recentOrder = getRecentOrder(valveType, quote.description);
+    const recentOrderPrice = recentOrder?.amount || null;
+    const targetPrice = recentOrderPrice ? recentOrderPrice * 0.9 : null;
+    
+    // 관련 발주 건수
+    const relatedOrders = orderHistoryAll.filter(o => o.valveType === valveType).length;
+    
+    // 판정
+    let verdict = '보통';
+    if (targetPrice && targetPrice >= quote.quotePrice) {
+      verdict = '우수';
+    } else if ((recentOrderPrice && recentOrderPrice >= quote.quotePrice) || (systemPrice && systemPrice >= quote.quotePrice)) {
+      verdict = '보통';
+    } else if (recentOrderPrice || systemPrice) {
+      verdict = '부적절';
+    }
+    
+    // 괴리율 계산
+    const diffRate = recentOrderPrice ? ((quote.quotePrice - recentOrderPrice) / recentOrderPrice) * 100 : null;
+    
+    // AI 분석
+    let aiAnalysis = '';
+    if (process.env.ANTHROPIC_API_KEY) {
+      const prompt = `견적 검증 결과:\n- 자재번호: ${quote.materialNo}\n- 협력사 견적: ${quote.quotePrice?.toLocaleString()}원\n- 시스템 추천: ${systemPrice?.toLocaleString() || '없음'}원\n- 최근 발주: ${recentOrderPrice?.toLocaleString() || '없음'}원\n- 판정: ${verdict}\n- 괴리율: ${diffRate?.toFixed(1) || '-'}%\n\n${verdict === '부적절' ? '협상 전략을' : '검토 의견을'} 1-2문장으로 제시해주세요.`;
+      aiAnalysis = await callClaude(prompt);
+    } else {
+      aiAnalysis = verdict === '우수' 
+        ? '견적가가 발주단가×90% 이하로 우수합니다. 즉시 발주를 권장합니다.'
+        : verdict === '부적절'
+          ? `견적가가 기준 대비 ${diffRate?.toFixed(1)}% 높습니다. 단가 재협상이 필요합니다.`
+          : '견적가가 적정 범위 내입니다. 추가 검토 후 진행 권장합니다.';
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        materialNo: quote.materialNo,
+        valveType,
+        description: quote.description,
+        quotePrice: quote.quotePrice,
+        systemPrice,
+        recentOrderPrice,
+        targetPrice,
+        relatedOrders,
+        verdict,
+        diffRate,
+        aiAnalysis,
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// 화면 3: 시황 분석 (프론트엔드용)
+app.post('/api/analyze/market-trend', async (req, res) => {
+  try {
+    const { valveType = 'VGBARR240AT' } = req.body;
+    
+    // BC 밸브 필터링 (LOCK 제외, TR 포함)
+    const bcFiltered = orderHistoryBC.filter(o => {
+      const desc = o.description || '';
+      return !desc.includes('LOCK') && desc.trim().endsWith('TR');
+    });
+    
+    // 월별 집계
+    const monthlyData: Record<number, { sum: number; count: number; orders: number }> = {};
+    for (const order of bcFiltered) {
+      const month = parseInt(order.orderDate?.split('-')[1] || '0');
+      if (month === 0) continue;
+      
+      const unitPrice = order.quantity > 0 ? order.orderAmount / order.quantity : 0;
+      if (!monthlyData[month]) monthlyData[month] = { sum: 0, count: 0, orders: 0 };
+      monthlyData[month].sum += unitPrice;
+      monthlyData[month].count++;
+      monthlyData[month].orders++;
+    }
+    
+    // 기준값 (1월)
+    const baseMonth = lmeData.find(d => d.month === 1);
+    const cuBase = baseMonth?.cuPricePerTon || 1;
+    const snBase = baseMonth?.snPricePerTon || 1;
+    const orderBase = monthlyData[1]?.count > 0 ? monthlyData[1].sum / monthlyData[1].count : 1;
+    
+    // 월별 데이터 구성
+    const chartData = [];
+    let prevCuSn: number | null = null;
+    let prevOrder: number | null = null;
+    const assessments: Record<number, string> = {};
+    
+    for (let month = 1; month <= 12; month++) {
+      const lme = lmeData.find(d => d.month === month);
+      if (!lme) continue;
+      
+      const cuIndex = (lme.cuPricePerTon / cuBase) * 100;
+      const snIndex = (lme.snPricePerTon / snBase) * 100;
+      const cuSnIndex = cuIndex * 0.88 + snIndex * 0.12;
+      
+      let orderIndex: number | null = null;
+      if (monthlyData[month]?.count > 0) {
+        const avg = monthlyData[month].sum / monthlyData[month].count;
+        orderIndex = (avg / orderBase) * 100;
+      }
+      
+      // 적정성 판정
+      if (prevCuSn !== null && prevOrder !== null && orderIndex !== null) {
+        const priceChange = orderIndex - prevOrder;
+        const marketChange = cuSnIndex - prevCuSn;
+        
+        const priceTrend = Math.abs(priceChange) <= 2 ? '유지' : priceChange > 0 ? '상승' : '하락';
+        const marketTrend = Math.abs(marketChange) <= 2 ? '유지' : marketChange > 0 ? '상승' : '하락';
+        
+        const matrix: Record<string, Record<string, string>> = {
+          '유지': { '유지': 'Normal', '하락': 'Bad', '상승': 'Good' },
+          '상승': { '유지': 'Bad', '하락': 'Bad', '상승': 'Normal' },
+          '하락': { '유지': 'Good', '하락': 'Bad', '상승': 'Good' },
+        };
+        assessments[month] = matrix[priceTrend]?.[marketTrend] || 'Normal';
+      }
+      
+      prevCuSn = cuSnIndex;
+      prevOrder = orderIndex;
+      
+      chartData.push({
+        month: `${month}월`,
+        cuSnIndex: Math.round(cuSnIndex * 10) / 10,
+        orderIndex: orderIndex ? Math.round(orderIndex * 10) / 10 : null,
+        orders: monthlyData[month]?.orders || 0,
+      });
+    }
+    
+    // 전체 적정성
+    const assessCounts = { Good: 0, Normal: 0, Bad: 0 };
+    Object.values(assessments).forEach(a => assessCounts[a as keyof typeof assessCounts]++);
+    const overallAssessment = assessCounts.Good >= assessCounts.Bad ? (assessCounts.Good > assessCounts.Normal ? 'Good' : 'Normal') : 'Bad';
+    
+    // AI 분석
+    let aiAnalysis = '';
+    if (process.env.ANTHROPIC_API_KEY) {
+      const badMonths = Object.entries(assessments).filter(([_, v]) => v === 'Bad').map(([k]) => `${k}월`);
+      const prompt = `BC밸브 ${valveType} 시황 분석:\n- 분석 건수: ${bcFiltered.length}건\n- 적정성 판정: Good ${assessCounts.Good}, Normal ${assessCounts.Normal}, Bad ${assessCounts.Bad}\n- Bad 월: ${badMonths.join(', ') || '없음'}\n\n시황 대비 단가 트렌드 분석과 향후 구매 전략을 2-3문장으로 제시해주세요.`;
+      aiAnalysis = await callClaude(prompt);
+    } else {
+      aiAnalysis = `${valveType} 타입 ${bcFiltered.length}건 분석 결과, ${overallAssessment === 'Good' ? '시황 대비 단가가 적정하게 관리되고 있습니다.' : overallAssessment === 'Bad' ? '시황 대비 단가 상승이 과다합니다. 협상이 필요합니다.' : '전반적으로 적정 수준입니다.'}`;
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        valveType,
+        totalOrders: bcFiltered.length,
+        monthlyData: chartData,
+        assessments,
+        overallAssessment,
+        aiAnalysis,
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
 });
 
 // ========== 화면 1: PR 최적 단가 제안 ==========
