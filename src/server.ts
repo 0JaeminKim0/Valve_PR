@@ -226,22 +226,74 @@ function getOptions(valveTypeBase: string, description: string, innerPaint?: str
   return { total, details };
 }
 
-function getRecentOrder(valveType: string, description?: string): { rank: string; vendor: string; date: string; amount: number } | null {
-  const orders = orderHistoryAll.filter(o => o.valveType === valveType);
-  if (orders.length === 0) return null;
+// 과거 발주실적 검색 (1순위: 밸브타입+자재내역 100% 일치, 2순위: 밸브타입만 일치)
+function getRecentOrders(valveType: string, description?: string): {
+  rank1: { vendor: string; date: string; amount: number; quantity: number; materialNo: string } | null;
+  rank2: { vendor: string; date: string; amount: number; quantity: number; materialNo: string } | null;
+  matchCount: { total: number; rank1: number; rank2: number };
+} {
+  // 밸브타입 매핑 (끝자리 T/L 등 제외)
+  const vtBase = valveType.slice(0, -1);  // VGBASW3A0AT → VGBASW3A0A
   
-  orders.sort((a, b) => (b.orderDate || '').localeCompare(a.orderDate || ''));
+  // 1순위: 밸브타입(끝자리 제외) + 자재내역 100% 일치
+  const descTrim = (description || '').trim().toUpperCase();
+  const rank1Orders = orderHistoryAll.filter(o => {
+    const ovt = o.valveType?.slice(0, -1) || '';
+    const odesc = (o.description || '').trim().toUpperCase();
+    return ovt === vtBase && odesc === descTrim;
+  });
   
-  if (description) {
-    const descTrim = description.trim();
-    const match = orders.find(o => o.description.trim() === descTrim);
-    if (match) {
-      return { rank: '1순위(타입+내역)', vendor: match.vendor, date: match.orderDate, amount: match.orderAmount };
+  // 2순위: 밸브타입(끝자리 제외)만 일치
+  const rank2Orders = orderHistoryAll.filter(o => {
+    const ovt = o.valveType?.slice(0, -1) || '';
+    return ovt === vtBase;
+  });
+  
+  // 최근 발주일 기준 정렬
+  rank1Orders.sort((a, b) => (b.orderDate || '').localeCompare(a.orderDate || ''));
+  rank2Orders.sort((a, b) => (b.orderDate || '').localeCompare(a.orderDate || ''));
+  
+  const rank1 = rank1Orders[0] ? {
+    vendor: rank1Orders[0].vendor,
+    date: rank1Orders[0].orderDate,
+    amount: rank1Orders[0].orderAmount,
+    quantity: rank1Orders[0].quantity || 1,
+    materialNo: rank1Orders[0].materialNo,
+  } : null;
+  
+  // 2순위는 1순위와 다른 건 중에서 선택 (중복 제거)
+  const rank2Filtered = rank2Orders.filter(o => 
+    !rank1 || o.materialNo !== rank1.materialNo || o.orderDate !== rank1.date
+  );
+  const rank2 = rank2Filtered[0] ? {
+    vendor: rank2Filtered[0].vendor,
+    date: rank2Filtered[0].orderDate,
+    amount: rank2Filtered[0].orderAmount,
+    quantity: rank2Filtered[0].quantity || 1,
+    materialNo: rank2Filtered[0].materialNo,
+  } : null;
+  
+  return {
+    rank1,
+    rank2,
+    matchCount: {
+      total: rank2Orders.length,
+      rank1: rank1Orders.length,
+      rank2: rank2Filtered.length,
     }
+  };
+}
+
+// 레거시 함수 (호환성 유지)
+function getRecentOrder(valveType: string, description?: string): { rank: string; vendor: string; date: string; amount: number } | null {
+  const result = getRecentOrders(valveType, description);
+  if (result.rank1) {
+    return { rank: '1순위(타입+내역)', vendor: result.rank1.vendor, date: result.rank1.date, amount: result.rank1.amount };
   }
-  
-  const latest = orders[0];
-  return { rank: '2순위(타입)', vendor: latest.vendor, date: latest.orderDate, amount: latest.orderAmount };
+  if (result.rank2) {
+    return { rank: '2순위(타입)', vendor: result.rank2.vendor, date: result.rank2.date, amount: result.rank2.amount };
+  }
+  return null;
 }
 
 // ========== Claude API ==========
