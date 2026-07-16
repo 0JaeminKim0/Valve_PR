@@ -290,7 +290,7 @@ ${JSON.stringify(orderData?.slice(0, 5), null, 2)}
   return streamSSE(c, async (stream) => {
     try {
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 2000,
         stream: true,
         system: systemPrompt,
@@ -338,7 +338,7 @@ ${JSON.stringify(monthlyAssessment, null, 2)}
   return streamSSE(c, async (stream) => {
     try {
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 2000,
         stream: true,
         system: systemPrompt,

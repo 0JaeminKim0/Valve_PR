@@ -26,7 +26,7 @@ CORS(app)
 # ═══════════════════════════════════════════════════════
 DATA_DIR = os.environ.get('DATA_DIR', os.path.join(os.path.dirname(__file__), 'data'))
 API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 
 # ═══════════════════════════════════════════════════════
@@ -45,7 +45,7 @@ def pct(a, b):
 # ═══════════════════════════════════════════════════════
 # Claude API
 # ═══════════════════════════════════════════════════════
-def call_claude(messages, tools=None, system=None, mt=3000):
+def call_claude(messages, tools=None, system=None, mt=4080):
     if not API_KEY:
         return None
     h = {

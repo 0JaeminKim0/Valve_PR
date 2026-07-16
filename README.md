@@ -56,7 +56,7 @@ PR(구매요청) 자재별 최적 단가를 제안하고, 협력사 견적단가
 
 - **Backend**: Python + Flask + Pandas
 - **Frontend**: HTML + Tailwind CSS + Chart.js
-- **AI**: Claude API (claude-sonnet-4-20250514)
+- **AI**: Claude API (claude-sonnet-4-6)
 - **배포**: Railway / Docker
 
 ## 데이터 구조

@@ -308,7 +308,7 @@ async function callClaude(prompt: string, system?: string): Promise<string> {
   
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       system: system || '조선/해양 밸브 구매 분석 전문가입니다. 한국어로 간결하게 답변합니다.',
       messages: [{ role: 'user', content: prompt }],
